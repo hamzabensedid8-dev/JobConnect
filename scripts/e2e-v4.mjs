@@ -151,7 +151,10 @@ r = await call('/api/payments/FAKE-REF/receipt.pdf', { token: candT });
 check('reçu inexistant -> 404', r.status === 404, r.status);
 
 r = await call('/api/webhooks/stripe', { method: 'POST', body: { type: 'x' }, headers: { 'stripe-signature': 't=1,v1=deadbeef' } });
-check('webhook sans secret configuré -> 503', r.status === 503, r.status);
+check('webhook non signé rejeté (400 sans secret configuré, 503 sans clé)', [400, 503].includes(r.status), r.status);
+
+r = await call('/api/webhooks/stripe', { method: 'POST', body: { type: 'checkout.session.completed' } });
+check('webhook sans signature rejeté', [400, 503].includes(r.status), r.status);
 
 console.log('\n=== 7. DÉCISION + MOTIF OBLIGATOIRE ===');
 r = await call(`/api/admin/applications/${appRef}`, { method: 'PATCH', token: adminT, body: { status: 'accepted' } });
