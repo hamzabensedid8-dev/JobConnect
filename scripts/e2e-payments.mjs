@@ -192,6 +192,42 @@ const track = await api(`/api/applications/track/${appRef}`);
 check('suivi public reflète accepted', track.data.application.status === 'accepted', track.data.application.status);
 check('suivi expose le motif', /contract issued/i.test(track.data.application.decision_reason || ''), track.data.application.decision_reason);
 
+console.log('\n=== COMPTE ENCAISSEUR (CONSOLE ADMIN) ===');
+const anonAcct = await api('/api/admin/payments/account');
+check('compte encaisseur protégé sans session', anonAcct.status === 401, anonAcct.status);
+
+const acct0 = await api('/api/admin/payments/account', { token: adminT });
+check('admin lit son compte encaisseur', acct0.status === 200, acct0.status);
+check('clé jamais renvoyée en clair', !/sk_(live|test)_[A-Za-z0-9]{8,}/.test(JSON.stringify(acct0.data)), JSON.stringify(acct0.data).slice(0, 160));
+check('source du compte exposée', ['none', 'environment', 'admin_console'].includes(acct0.data.source), acct0.data.source);
+
+const badSecret = await api('/api/admin/payments/account', {
+  method: 'PUT', token: adminT, body: { secret_key: 'sk_test_not_a_real_key' }
+});
+check('clé Stripe invalide refusée (400)', badSecret.status === 400, badSecret.status + ' ' + JSON.stringify(badSecret.data).slice(0, 120));
+
+const badHook = await api('/api/admin/payments/account', {
+  method: 'PUT', token: adminT, body: { webhook_secret: 'pas-un-whsec' }
+});
+check('secret webhook mal formé refusé (400)', badHook.status === 400, badHook.status);
+
+const okHook = await api('/api/admin/payments/account', {
+  method: 'PUT', token: adminT, body: { webhook_secret: 'whsec_e2e0123456789abcdef', label: 'e2e' }
+});
+check('secret webhook valide accepté', okHook.status === 200, okHook.status + ' ' + JSON.stringify(okHook.data).slice(0, 120));
+
+const acct1 = await api('/api/admin/payments/account', { token: adminT });
+check('webhook enregistré et masqué', acct1.data.webhook_configured === true && /^whsec_…/.test(acct1.data.webhook_secret || ''), JSON.stringify(acct1.data).slice(0, 160));
+
+const cleared = await api('/api/admin/payments/account', { method: 'DELETE', token: adminT });
+check('compte encaisseur supprimable', cleared.status === 200, cleared.status);
+
+console.log('\n=== FORMULAIRE CARTE (PAYMENTINTENT) ===');
+const intentAnon = await api('/api/payments/intent', { method: 'POST', body: { reference: appRef } });
+check('intent protégé sans session', intentAnon.status === 401, intentAnon.status);
+const intentUnknown = await api('/api/payments/intent', { method: 'POST', token: adminT, body: { reference: 'JC-ZZZZZZ' } });
+check('intent sur référence inconnue -> 404', intentUnknown.status === 404, intentUnknown.status);
+
 console.log(`\n${'='.repeat(56)}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);
 if (fail) { failures.forEach((f) => console.log(' - ' + f)); process.exit(1); }

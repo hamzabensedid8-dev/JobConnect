@@ -212,7 +212,7 @@ to the run and published as a release asset.
 
 ```bash
 BASE=https://... ADMIN_PASSWORD=... ADMIN_CLIENT_KEY=... node scripts/e2e-v4.mjs
-BASE=https://... STRIPE_WEBHOOK_SECRET=... node scripts/e2e-payments.mjs
+BASE=https://... STRIPE_WEBHOOK_SECRET=... node scripts/e2e-payments.mjs   # 35 checks
 BASE=https://... node scripts/e2e-chat.mjs
 ```
 

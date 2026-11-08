@@ -116,7 +116,7 @@ function emailLayout(title, bodyHtml, footer = '') {
 /* ------------------------------------------------------------------ Stripe
    Checkout Sessions + vérification de signature de webhook. */
 
-let CRED_CACHE = { at: 0, secret: null, publishable: null, source: 'none' };
+let CRED_CACHE = { at: 0, secret: null, publishable: null, webhook: null, source: 'none' };
 
 /**
  * Clés Stripe effectives.
@@ -132,16 +132,21 @@ async function loadStripeCredentials(env, rest, { force = false } = {}) {
   let publishable = env.STRIPE_PUBLISHABLE_KEY || null;
   let source = secret ? 'environment' : 'none';
 
+  let webhook = env.STRIPE_WEBHOOK_SECRET || null;
+
   if (env.CREDENTIAL_KEY && rest) {
     try {
-      const dbSecret = await rest(env, 'rpc/jc_get_credential', {
-        method: 'POST',
-        body: { p_key: 'stripe_secret_key', p_passphrase: env.CREDENTIAL_KEY }
-      });
-      const dbPub = await rest(env, 'rpc/jc_get_credential', {
-        method: 'POST',
-        body: { p_key: 'stripe_publishable_key', p_passphrase: env.CREDENTIAL_KEY }
-      });
+      const read = (key) =>
+        rest(env, 'rpc/jc_get_credential', {
+          method: 'POST',
+          body: { p_key: key, p_passphrase: env.CREDENTIAL_KEY }
+        });
+      const [dbSecret, dbPub, dbWebhook] = await Promise.all([
+        read('stripe_secret_key'),
+        read('stripe_publishable_key'),
+        read('stripe_webhook_secret')
+      ]);
+      if (typeof dbWebhook === 'string' && dbWebhook.startsWith('whsec_')) webhook = dbWebhook;
       if (typeof dbSecret === 'string' && dbSecret.startsWith('sk_')) {
         secret = dbSecret;
         source = 'admin_console';
@@ -154,12 +159,12 @@ async function loadStripeCredentials(env, rest, { force = false } = {}) {
     }
   }
 
-  CRED_CACHE = { at: now, secret, publishable, source };
+  CRED_CACHE = { at: now, secret, publishable, webhook, source };
   return CRED_CACHE;
 }
 
 function resetStripeCredentials() {
-  CRED_CACHE = { at: 0, secret: null, publishable: null, source: 'none' };
+  CRED_CACHE = { at: 0, secret: null, publishable: null, webhook: null, source: 'none' };
 }
 
 async function stripeCreds(env, rest) {

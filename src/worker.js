@@ -1127,7 +1127,7 @@ async function handleApi(request, url, env) {
         average_response_minutes: avgMinutes
       },
       active_subscriptions: (activeSubs || []).length,
-      integrations: { payments: Boolean(creds.secret), email: mailConfigured(env) }
+      integrations: { payments: Boolean(overviewCreds.secret), email: mailConfigured(env) }
     });
   }
 
@@ -1792,6 +1792,8 @@ async function handleApi(request, url, env) {
         ? creds.publishable.slice(0, 12) + '…' + creds.publishable.slice(-4)
         : null,
       secret_key: creds.secret ? creds.secret.slice(0, 7) + '…' + creds.secret.slice(-4) : null,
+      webhook_configured: Boolean(creds.webhook),
+      webhook_secret: creds.webhook ? 'whsec_…' + creds.webhook.slice(-4) : null,
       updated_at: secretHint ? secretHint.updated_at : null,
       hint: secretHint ? secretHint.hint : null
     });
@@ -1807,9 +1809,13 @@ async function handleApi(request, url, env) {
     const body = await request.json().catch(() => ({}));
     const secretKey = str(body.secret_key, 200);
     const publishableKey = str(body.publishable_key, 200);
+    const webhookSecret = str(body.webhook_secret, 200);
     const label = str(body.label, 120) || 'Stripe account';
 
-    if (!secretKey && !publishableKey) return fail('secret_key is required.');
+    if (!secretKey && !publishableKey && !webhookSecret) return fail('secret_key is required.');
+    if (webhookSecret && !/^whsec_[A-Za-z0-9]+/.test(webhookSecret)) {
+      return fail('That does not look like a Stripe webhook secret (whsec_…).');
+    }
     if (secretKey && !/^sk_(live|test)_[A-Za-z0-9]+/.test(secretKey)) {
       return fail('That does not look like a Stripe secret key (sk_live_… or sk_test_…).');
     }
@@ -1861,6 +1867,18 @@ async function handleApi(request, url, env) {
         }
       });
     }
+    if (webhookSecret) {
+      await rest(env, 'rpc/jc_set_credential', {
+        method: 'POST',
+        body: {
+          p_key: 'stripe_webhook_secret',
+          p_value: webhookSecret,
+          p_passphrase: env.CREDENTIAL_KEY,
+          p_hint: label,
+          p_actor: claims.id
+        }
+      });
+    }
 
     await rest(env, 'payout_accounts', {
       method: 'POST',
@@ -1889,6 +1907,7 @@ async function handleApi(request, url, env) {
     if (claims.role !== 'admin') return fail('Access denied.', 403);
     await rest(env, 'rpc/jc_delete_credential', { method: 'POST', body: { p_key: 'stripe_secret_key' } });
     await rest(env, 'rpc/jc_delete_credential', { method: 'POST', body: { p_key: 'stripe_publishable_key' } });
+    await rest(env, 'rpc/jc_delete_credential', { method: 'POST', body: { p_key: 'stripe_webhook_secret' } });
     resetStripeCredentials();
     await audit(env, claims.id, 'payout_account_removed', 'stripe', null);
     return json({ message: 'Receiving account removed. Card payments are disabled.' });
@@ -1972,10 +1991,15 @@ async function handleApi(request, url, env) {
   if (path === '/api/webhooks/stripe' && method === 'POST') {
     const raw = await request.text();
     const signature = request.headers.get('stripe-signature');
-    const secret = env.STRIPE_WEBHOOK_SECRET;
+    // Le secret de signature peut venir de l'environnement ou de la console admin.
+    const hookCreds = await loadStripeCredentials(env, rest, { force: true });
+    const secret = hookCreds.webhook || env.STRIPE_WEBHOOK_SECRET;
 
     if (!secret) {
-      return fail('Stripe webhook secret is not configured.', 503);
+      return fail(
+        'Stripe webhook secret is not configured. An administrator can add it in the admin console (Money tab).',
+        503
+      );
     }
     const valid = await verifyStripeSignature(raw, signature, secret);
     if (!valid) return fail('Invalid Stripe signature.', 400);
