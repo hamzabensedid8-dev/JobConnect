@@ -116,10 +116,62 @@ function emailLayout(title, bodyHtml, footer = '') {
 /* ------------------------------------------------------------------ Stripe
    Checkout Sessions + vérification de signature de webhook. */
 
-const stripeConfigured = (env) => Boolean(env.STRIPE_SECRET_KEY);
-const stripeSecret = (env) => env.STRIPE_SECRET_KEY || '';
+let CRED_CACHE = { at: 0, secret: null, publishable: null, source: 'none' };
 
-async function stripeRequest(env, path, params) {
+/**
+ * Clés Stripe effectives.
+ * L'admin peut changer le compte encaisseur depuis l'application : la clé est
+ * alors stockée chiffrée en base (pgp_sym_encrypt) et prend le pas sur la
+ * variable d'environnement. Le cache évite un aller-retour SQL par requête.
+ */
+async function loadStripeCredentials(env, rest, { force = false } = {}) {
+  const now = Date.now();
+  if (!force && CRED_CACHE.at && now - CRED_CACHE.at < 60000) return CRED_CACHE;
+
+  let secret = env.STRIPE_SECRET_KEY || null;
+  let publishable = env.STRIPE_PUBLISHABLE_KEY || null;
+  let source = secret ? 'environment' : 'none';
+
+  if (env.CREDENTIAL_KEY && rest) {
+    try {
+      const dbSecret = await rest(env, 'rpc/jc_get_credential', {
+        method: 'POST',
+        body: { p_key: 'stripe_secret_key', p_passphrase: env.CREDENTIAL_KEY }
+      });
+      const dbPub = await rest(env, 'rpc/jc_get_credential', {
+        method: 'POST',
+        body: { p_key: 'stripe_publishable_key', p_passphrase: env.CREDENTIAL_KEY }
+      });
+      if (typeof dbSecret === 'string' && dbSecret.startsWith('sk_')) {
+        secret = dbSecret;
+        source = 'admin_console';
+      }
+      if (typeof dbPub === 'string' && dbPub.startsWith('pk_')) {
+        publishable = dbPub;
+      }
+    } catch (err) {
+      console.error('credential read failed:', err && err.message ? err.message : err);
+    }
+  }
+
+  CRED_CACHE = { at: now, secret, publishable, source };
+  return CRED_CACHE;
+}
+
+function resetStripeCredentials() {
+  CRED_CACHE = { at: 0, secret: null, publishable: null, source: 'none' };
+}
+
+async function stripeCreds(env, rest) {
+  const c = await loadStripeCredentials(env, rest, { force: true });
+  return c.secret || '';
+}
+
+const stripeConfigured = (env) => Boolean(env.STRIPE_SECRET_KEY);
+
+async function stripeRequest(env, path, params, rest) {
+  const secret = rest ? await stripeCreds(env, rest) : env.STRIPE_SECRET_KEY || '';
+  if (!secret) throw new Error('Stripe is not configured.');
   const body = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null) continue;
@@ -128,7 +180,7 @@ async function stripeRequest(env, path, params) {
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${stripeSecret(env)}`,
+      Authorization: `Bearer ${secret}`,
       'content-type': 'application/x-www-form-urlencoded'
     },
     body
@@ -140,10 +192,11 @@ async function stripeRequest(env, path, params) {
   return data;
 }
 
-async function stripeCancel(env, path) {
+async function stripeCancel(env, path, rest) {
+  const secret = rest ? await stripeCreds(env, rest) : env.STRIPE_SECRET_KEY || '';
   const res = await fetch(`https://api.stripe.com/v1/${path}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${stripeSecret(env)}` }
+    headers: { Authorization: `Bearer ${secret}` }
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data.error && data.error.message) || `Stripe error ${res.status}`);
@@ -291,6 +344,9 @@ export {
   money,
   mailConfigured,
   stripeConfigured,
+  loadStripeCredentials,
+  resetStripeCredentials,
+  stripeCreds,
   stripeRequest,
   stripeCancel,
   verifyStripeSignature,

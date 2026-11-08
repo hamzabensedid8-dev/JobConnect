@@ -65,3 +65,43 @@
   .jc-chat.side-hidden .jc-chat-side{display:none}
   .jc-launcher{right:12px;bottom:12px}
 }
+
+/* ---------------------------------------------- formulaire carte (checkout) */
+.pay-sheet { max-width: 520px; }
+.card-form { margin-top: 14px; }
+.card-form-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; margin-bottom: 12px;
+  border: 1px solid rgba(120, 140, 180, .3);
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(29, 78, 216, .07), rgba(29, 78, 216, .02));
+}
+.card-brands {
+  font: 800 11px/1 system-ui, sans-serif; letter-spacing: .08em;
+  color: #1a1f71; background: #fff; border-radius: 5px; padding: 4px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
+}
+.card-brands.alt { color: #eb001b; }
+.card-form-head .lock { margin-left: auto; font-size: 11px; color: #5b6577; font-weight: 700; }
+.payment-element {
+  min-height: 120px; padding: 4px 0 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.payment-element.mounted { display: block; }
+.pay-loading { display: flex; align-items: center; gap: 10px; color: #5b6577; font-size: 13px; padding: 18px 0; }
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid rgba(29, 78, 216, .25); border-top-color: #1d4ed8;
+  animation: jc-spin .8s linear infinite; display: inline-block;
+}
+@keyframes jc-spin { to { transform: rotate(360deg); } }
+.btn.wide { width: 100%; }
+.pay-note { font-size: 11.5px; line-height: 1.55; color: #5b6577; margin-top: 10px; }
+.pay-error { color: #c0242a; font-size: 12.5px; min-height: 16px; margin: 8px 0 0; }
+.pay-status { margin: 12px 0; padding: 10px 12px; border-radius: 10px; background: rgba(120, 140, 180, .12); font-size: 13px; }
+.pay-status.ok { background: rgba(22, 163, 74, .12); color: #15803d; }
+@media (prefers-color-scheme: dark) {
+  .card-form-head { background: rgba(90, 140, 255, .1); border-color: rgba(120, 160, 255, .25); }
+  .pay-note, .pay-loading, .card-form-head .lock { color: #9aa6bd; }
+  .pay-sheet { background: #121826; color: #e7ecf5; }
+}

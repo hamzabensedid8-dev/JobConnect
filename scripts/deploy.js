@@ -68,7 +68,9 @@ const secrets = {
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
   // Resend (real e-mail delivery). Empty = e-mails are logged as "skipped".
   RESEND_API_KEY: process.env.RESEND_API_KEY || '',
-  MAIL_FROM: process.env.MAIL_FROM || ''
+  MAIL_FROM: process.env.MAIL_FROM || '',
+  STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY || '',
+  CREDENTIAL_KEY: process.env.CREDENTIAL_KEY || ''
 };
 
 for (const [key, value] of Object.entries(secrets)) {

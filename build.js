@@ -10,7 +10,8 @@ const root = path.dirname(new URL(import.meta.url).pathname);
 const publicDir = path.join(root, 'public');
 const outDir = path.join(root, 'dist');
 
-const TEXT_EXT = new Set(['.html', '.css', '.js', '.svg', '.json', '.txt', '.ico']);
+const TEXT_EXT = new Set(['.html', '.css', '.js', '.svg', '.json', '.txt', '.ico', '.webmanifest']);
+const BIN_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 
 async function collect(dir, prefix = '') {
   const assets = {};
@@ -20,7 +21,11 @@ async function collect(dir, prefix = '') {
     if (entry.isDirectory()) {
       Object.assign(assets, await collect(full, rel));
     } else if (TEXT_EXT.has(path.extname(entry.name).toLowerCase())) {
-      assets[rel] = await readFile(full, 'utf8');
+      assets[rel] = { text: await readFile(full, 'utf8') };
+    } else if (BIN_EXT.has(path.extname(entry.name).toLowerCase())) {
+      // Les images sont embarquées en base64 pour rester un seul module Worker.
+      const buf = await readFile(full);
+      assets[rel] = { b64: buf.toString('base64'), type: path.extname(entry.name).toLowerCase() };
     }
   }
   return assets;

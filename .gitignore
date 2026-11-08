@@ -6,3 +6,5 @@ dist/
 *.local
 .DS_Store
 .admin-password
+__pycache__/
+*.pyc

@@ -21,6 +21,9 @@ import {
   money,
   mailConfigured,
   stripeConfigured,
+  loadStripeCredentials,
+  resetStripeCredentials,
+  stripeCreds,
   stripeRequest,
   stripeCancel,
   verifyStripeSignature,
@@ -1061,6 +1064,7 @@ async function handleApi(request, url, env) {
 
   if (path === '/api/admin/overview' && method === 'GET') {
     const settings = await getSettings(env);
+    const overviewCreds = await loadStripeCredentials(env, rest, { force: true });
     const [users, applications, jobs, subscriptions, latestApplications, latestJobs, payments, activeSubs] = await Promise.all([
       rest(env, 'users?select=role'),
       rest(env, 'applications?select=status'),
@@ -1123,7 +1127,7 @@ async function handleApi(request, url, env) {
         average_response_minutes: avgMinutes
       },
       active_subscriptions: (activeSubs || []).length,
-      integrations: { payments: stripeConfigured(env), email: mailConfigured(env) }
+      integrations: { payments: Boolean(creds.secret), email: mailConfigured(env) }
     });
   }
 
@@ -1599,10 +1603,11 @@ async function handleApi(request, url, env) {
     }
     if (app.paid_at) return fail('This request is already paid.', 409);
 
-    if (!stripeConfigured(env)) {
+    const creds = await loadStripeCredentials(env, rest, { force: true });
+    if (!creds.secret) {
       return fail(
-        'Card payments are not configured on this deployment ' +
-          '(STRIPE_SECRET_KEY is missing). No payment was attempted.',
+        'Card payments are not configured yet. An administrator must add the receiving ' +
+          'account in the admin console (Settings → Receiving account).',
         503
       );
     }
@@ -1646,7 +1651,7 @@ async function handleApi(request, url, env) {
       cancel_url: `${origin}/payment/cancel?reference=${encodeURIComponent(app.reference)}`,
       'metadata[application_reference]': app.reference,
       'metadata[payment_reference]': paymentRef
-    });
+    }, rest);
 
     await rest(env, `payments?id=eq.${inserted[0].id}`, {
       method: 'PATCH',
@@ -1669,6 +1674,32 @@ async function handleApi(request, url, env) {
     const sessionId = str(url.searchParams.get('session_id'), 200);
     if (!sessionId) return fail('session_id is required.');
     const rows = await rest(env, `payments?provider_session_id=eq.${encodeURIComponent(sessionId)}&select=*`);
+    const payment = rows && rows[0];
+    if (!payment) return fail('Payment not found.', 404);
+    if (claims.role !== 'admin' && payment.payer_id !== claims.id) return fail('Access denied.', 403);
+
+    const apps = payment.application_id
+      ? await rest(env, `applications?id=eq.${payment.application_id}&select=reference,status,profession,target_country`)
+      : [];
+    return json({
+      payment: {
+        reference: payment.reference,
+        status: payment.status,
+        total_cents: payment.total_cents,
+        fee_cents: payment.fee_cents,
+        recruiter_price_cents: payment.recruiter_price_cents,
+        currency: payment.currency,
+        receipt_number: payment.receipt_number
+      },
+      application: (apps || [])[0] || null
+    });
+  }
+
+  if (path === '/api/payments/by-reference' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    const ref = str(url.searchParams.get('reference'), 40).toUpperCase();
+    if (!ref) return fail('reference is required.');
+    const rows = await rest(env, `payments?reference=eq.${encodeURIComponent(ref)}&select=*&order=created_at.desc`);
     const payment = rows && rows[0];
     if (!payment) return fail('Payment not found.', 404);
     if (claims.role !== 'admin' && payment.payer_id !== claims.id) return fail('Access denied.', 403);
@@ -1734,6 +1765,206 @@ async function handleApi(request, url, env) {
         'cache-control': 'private, no-store'
       }
     });
+  }
+
+
+  /* ------------------------------------------- compte encaisseur (admin) */
+
+  if (path === '/api/admin/payments/account' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+
+    const creds = await loadStripeCredentials(env, rest, { force: true });
+    const rows = await rest(
+      env,
+      'integration_credentials?select=key,hint,updated_at&order=updated_at.desc'
+    );
+    const hints = {};
+    for (const row of rows || []) hints[row.key] = row;
+
+    const secretHint = hints.stripe_secret_key || null;
+    const pubHint = hints.stripe_publishable_key || null;
+
+    return json({
+      configured: Boolean(creds.secret),
+      source: creds.source,
+      publishable_key: creds.publishable
+        ? creds.publishable.slice(0, 12) + '…' + creds.publishable.slice(-4)
+        : null,
+      secret_key: creds.secret ? creds.secret.slice(0, 7) + '…' + creds.secret.slice(-4) : null,
+      updated_at: secretHint ? secretHint.updated_at : null,
+      hint: secretHint ? secretHint.hint : null
+    });
+  }
+
+  if (path === '/api/admin/payments/account' && method === 'PUT') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    if (!env.CREDENTIAL_KEY) {
+      return fail('CREDENTIAL_KEY is not configured on the server; credentials cannot be stored.', 503);
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const secretKey = str(body.secret_key, 200);
+    const publishableKey = str(body.publishable_key, 200);
+    const label = str(body.label, 120) || 'Stripe account';
+
+    if (!secretKey && !publishableKey) return fail('secret_key is required.');
+    if (secretKey && !/^sk_(live|test)_[A-Za-z0-9]+/.test(secretKey)) {
+      return fail('That does not look like a Stripe secret key (sk_live_… or sk_test_…).');
+    }
+    if (publishableKey && !/^pk_(live|test)_[A-Za-z0-9]+/.test(publishableKey)) {
+      return fail('That does not look like a Stripe publishable key (pk_live_… or pk_test_…).');
+    }
+
+    // Vérification réelle auprès de Stripe avant d'enregistrer quoi que ce soit.
+    let account = null;
+    if (secretKey) {
+      try {
+        const res = await fetch('https://api.stripe.com/v1/balance', {
+          headers: { Authorization: `Bearer ${secretKey}` }
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          return fail(`Stripe refused this key: ${(data.error && data.error.message) || res.status}`, 400);
+        }
+        account = {
+          available: (data.available || []).map((b) => ({ amount: b.amount, currency: b.currency })),
+          livemode: Boolean(data.livemode)
+        };
+      } catch (err) {
+        return fail('Could not reach Stripe to verify this key.', 502);
+      }
+    }
+
+    if (secretKey) {
+      await rest(env, 'rpc/jc_set_credential', {
+        method: 'POST',
+        body: {
+          p_key: 'stripe_secret_key',
+          p_value: secretKey,
+          p_passphrase: env.CREDENTIAL_KEY,
+          p_hint: label,
+          p_actor: claims.id
+        }
+      });
+    }
+    if (publishableKey) {
+      await rest(env, 'rpc/jc_set_credential', {
+        method: 'POST',
+        body: {
+          p_key: 'stripe_publishable_key',
+          p_value: publishableKey,
+          p_passphrase: env.CREDENTIAL_KEY,
+          p_hint: label,
+          p_actor: claims.id
+        }
+      });
+    }
+
+    await rest(env, 'payout_accounts', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: {
+        label,
+        provider: 'stripe',
+        account_id: account ? (account.livemode ? 'live' : 'test') : null,
+        currency: account && account.available[0] ? account.available[0].currency : null
+      }
+    });
+
+    resetStripeCredentials();
+    await audit(env, claims.id, 'payout_account_changed', label, {
+      livemode: account ? account.livemode : null
+    });
+
+    return json({
+      message: 'Receiving account updated. New payments are sent to this account.',
+      account
+    });
+  }
+
+  if (path === '/api/admin/payments/account' && method === 'DELETE') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    await rest(env, 'rpc/jc_delete_credential', { method: 'POST', body: { p_key: 'stripe_secret_key' } });
+    await rest(env, 'rpc/jc_delete_credential', { method: 'POST', body: { p_key: 'stripe_publishable_key' } });
+    resetStripeCredentials();
+    await audit(env, claims.id, 'payout_account_removed', 'stripe', null);
+    return json({ message: 'Receiving account removed. Card payments are disabled.' });
+  }
+
+  /* ------------------------------------- formulaire carte (PaymentIntent) */
+
+  if (path === '/api/payments/intent' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    const body = await request.json().catch(() => ({}));
+    const reference = str(body.reference, 40);
+    if (!reference) return fail('reference is required.');
+
+    const rows = await rest(
+      env,
+      `applications?reference=eq.${encodeURIComponent(reference.toUpperCase())}&select=*`
+    );
+    const app = rows && rows[0];
+    if (!app) return fail('Request not found.', 404);
+    if (app.candidate_id && app.candidate_id !== claims.id && claims.role !== 'admin') {
+      return fail('Access denied.', 403);
+    }
+    if (app.paid_at) return fail('This request is already paid.', 409);
+
+    const creds = await loadStripeCredentials(env, rest, { force: true });
+    if (!creds.secret) {
+      return fail('Card payments are not configured yet. An administrator must add the receiving account.', 503);
+    }
+
+    const settings = await getSettings(env);
+    const fee = Number(app.fee_cents != null ? app.fee_cents : settings.jobconnect_fee_cents);
+    const recruiterPrice = Number(app.recruiter_price_cents || 0);
+    const total = Number(app.total_cents != null ? app.total_cents : fee + recruiterPrice);
+    const currency = (app.currency || settings.currency || 'USD').toLowerCase();
+
+    const paymentRef = `JC-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const inserted = await rest(env, 'payments', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: {
+        reference: paymentRef,
+        application_id: app.id,
+        payer_id: claims.id,
+        kind: 'application',
+        fee_cents: fee,
+        recruiter_price_cents: recruiterPrice,
+        total_cents: total,
+        currency: currency.toUpperCase(),
+        status: 'pending'
+      }
+    });
+
+    const intent = await stripeRequest(env, 'payment_intents', {
+      amount: total,
+      currency,
+      'automatic_payment_methods[enabled]': 'true',
+      'metadata[application_reference]': app.reference,
+      'metadata[payment_reference]': paymentRef,
+      receipt_email: app.email
+    }, rest);
+
+    await rest(env, `payments?id=eq.${inserted[0].id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: { provider_payment_intent: intent.id }
+    });
+
+    return json({
+      payment_reference: paymentRef,
+      client_secret: intent.client_secret,
+      publishable_key: creds.publishable || null,
+      total_cents: total,
+      fee_cents: fee,
+      recruiter_price_cents: recruiterPrice,
+      currency: currency.toUpperCase()
+    }, 201);
   }
 
   /* --------------------------------------------- webhook Stripe (public) */
@@ -1860,6 +2091,73 @@ async function handleApi(request, url, env) {
       return json({ received: true });
     }
 
+    if (event.type === 'payment_intent.succeeded') {
+      const intent = event.data.object || {};
+      const metadata = intent.metadata || {};
+      const paymentRef = metadata.payment_reference;
+
+      let payment = null;
+      if (paymentRef) {
+        const rows = await rest(env, `payments?reference=eq.${encodeURIComponent(paymentRef)}&select=*`);
+        payment = rows && rows[0];
+      }
+      if (!payment && intent.id) {
+        const rows = await rest(env, `payments?provider_payment_intent=eq.${encodeURIComponent(intent.id)}&select=*`);
+        payment = rows && rows[0];
+      }
+      if (!payment) return json({ received: true, ignored: 'unknown payment intent' });
+      if (payment.status === 'paid') return json({ received: true, idempotent: true });
+
+      const nowIso = new Date().toISOString();
+      const receiptNumber = `JC-R-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+      await rest(env, `payments?id=eq.${payment.id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: {
+          status: 'paid',
+          paid_at: nowIso,
+          receipt_number: receiptNumber,
+          provider_payment_intent: intent.id
+        }
+      });
+      if (payment.application_id) {
+        await rest(env, `applications?id=eq.${payment.application_id}`, {
+          method: 'PATCH',
+          prefer: 'return=minimal',
+          body: { paid_at: nowIso }
+        });
+      }
+
+      const apps = payment.application_id
+        ? await rest(env, `applications?id=eq.${payment.application_id}&select=*`)
+        : [];
+      const app = (apps || [])[0];
+      if (app) {
+        await sendEmail(env, rest, {
+          to: app.email,
+          userId: app.candidate_id,
+          template: 'payment_receipt',
+          subject: `JobConnect payment receipt ${receiptNumber}`,
+          html: emailLayout(
+            'Payment confirmed',
+            `<p>Hello ${app.full_name},</p>
+             <p>We received your card payment for request <b>${app.reference}</b>.</p>
+             <p>Amount: <b>${money(payment.total_cents, payment.currency)}</b><br>
+             Receipt number: <b>${receiptNumber}</b></p>`,
+            'Keep this receipt for your records.'
+          )
+        });
+        await notify(env, app.candidate_id, {
+          type: 'payment_confirmed',
+          title: 'Payment confirmed',
+          body: `Receipt ${receiptNumber} — ${money(payment.total_cents, payment.currency)}`,
+          application_ref: app.reference
+        });
+      }
+      return json({ received: true });
+    }
+
     if (event.type === 'checkout.session.expired' || event.type === 'payment_intent.payment_failed') {
       const session = event.data.object || {};
       const paymentRef = (session.metadata || {}).payment_reference;
@@ -1950,10 +2248,11 @@ async function handleApi(request, url, env) {
     const existing = await activeSubscription(env, claims.id);
     if (existing) return fail('You already have an active subscription.', 409);
 
-    if (!stripeConfigured(env)) {
+    const subCreds = await loadStripeCredentials(env, rest, { force: true });
+    if (!subCreds.secret) {
       return fail(
-        'Card payments are not configured on this deployment (STRIPE_SECRET_KEY is missing). ' +
-          'No subscription was created.',
+        'Card payments are not configured yet. An administrator must add the receiving ' +
+          'account in the admin console (Settings → Receiving account).',
         503
       );
     }
@@ -1990,7 +2289,7 @@ async function handleApi(request, url, env) {
       'metadata[subscription_id]': String(subRows[0].id),
       'metadata[kind]': 'subscription',
       'metadata[user_id]': claims.id
-    });
+    }, rest);
 
     await rest(env, `subscriptions?id=eq.${subRows[0].id}`, {
       method: 'PATCH',
@@ -2026,8 +2325,21 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  '.json': 'application/json'
+  '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp'
 };
+
+/** Décode un asset base64 (images) vers un tableau d'octets. */
+function b64ToBytes(b64) {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 
 function serveStatic(url) {
   const assets = typeof __ASSETS__ === 'object' ? __ASSETS__ : {};
@@ -2037,17 +2349,24 @@ function serveStatic(url) {
   const file = assets[key];
   if (file !== undefined) {
     const ext = extensionOf(key) || '.html';
-    return new Response(file, {
+    const isImage = file && typeof file === 'object' && file.b64 !== undefined;
+    const body = isImage ? b64ToBytes(file.b64) : (typeof file === 'object' ? file.text : file);
+    return new Response(body, {
       headers: {
         'content-type': MIME[ext] || 'application/octet-stream',
-        'cache-control': ext === '.html' ? 'public, max-age=0, must-revalidate' : 'public, max-age=3600'
+        'cache-control':
+          ext === '.html'
+            ? 'public, max-age=0, must-revalidate'
+            : isImage
+              ? 'public, max-age=604800, immutable'
+              : 'public, max-age=3600'
       }
     });
   }
 
   // Single-page fallback.
   if (assets['index.html'] !== undefined && !/\.[a-z0-9]+$/i.test(key)) {
-    return new Response(assets['index.html'], {
+    return new Response(assets['index.html'].text, {
       headers: { 'content-type': MIME['.html'], 'cache-control': 'public, max-age=0, must-revalidate' }
     });
   }

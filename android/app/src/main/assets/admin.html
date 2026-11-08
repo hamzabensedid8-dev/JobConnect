@@ -115,6 +115,7 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
     <button data-view="jobs">Jobs</button>
     <button data-view="chats">Chats</button>
     <button data-view="notifs">Alerts</button>
+    <button data-view="money">Money</button>
     <button data-view="settings">Settings</button>
   </nav>
 
@@ -146,6 +147,41 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
     </div>
 
     <div class="view" id="view-notifs"><div id="notifList"></div></div>
+
+    <div class="view" id="view-money">
+      <h3>Where money is received</h3>
+      <div class="card" id="payoutStatus"><p class="muted">Loading…</p></div>
+
+      <h3>Change receiving account</h3>
+      <div class="card">
+        <p class="muted" style="margin-top:0">
+          Payments go to a merchant account (Stripe), never to a card number. Paste the keys of the
+          account that should receive the money — the change applies immediately to new payments.
+          The key is stored encrypted and only its last 4 characters are shown again.
+        </p>
+        <label>Account label (how you recognise it)</label>
+        <input id="payoutLabel" type="text" maxlength="120" placeholder="e.g. JobConnect DZ main account">
+        <label>Secret key (sk_live_… or sk_test_…)</label>
+        <input id="payoutSecret" type="password" autocomplete="off" spellcheck="false" placeholder="sk_live_…">
+        <label>Publishable key (pk_live_… / pk_test_…) — needed for the card form on the site</label>
+        <input id="payoutPublishable" type="text" autocomplete="off" spellcheck="false" placeholder="pk_live_…">
+        <div class="row" style="gap:8px;margin-top:12px">
+          <button class="btn" id="payoutSave">Verify &amp; activate</button>
+          <button class="btn danger" id="payoutClear">Remove account</button>
+        </div>
+        <p class="muted" id="payoutMsg" style="margin-bottom:0"></p>
+      </div>
+
+      <h3>Good to know</h3>
+      <div class="card">
+        <p class="muted" style="margin:0">
+          Visa and Mastercard rules forbid storing the 3-digit security code (CVC) of a card, so no
+          platform can keep cards on file and switch between them the way you switch a phone number.
+          Switching accounts with the keys above is the compliant equivalent: you point the platform to
+          whichever of your merchant accounts should collect the money.
+        </p>
+      </div>
+    </div>
 
     <div class="view" id="view-settings">
       <h3>Platform pricing and SLA</h3>
@@ -261,6 +297,8 @@ document.querySelectorAll(".tabs button").forEach(function(b){
     document.querySelectorAll(".view").forEach(function(v){v.classList.remove("on");});
     b.classList.add("on");
     document.getElementById("view-" + b.dataset.view).classList.add("on");
+    if (b.dataset.view === "money") loadPayoutAccount();
+    if (b.dataset.view === "settings") loadSettings();
   };
 });
 
@@ -476,6 +514,62 @@ document.getElementById("chatMsgs").addEventListener("click", async function(e){
     toast("Message deleted for both parties.");
   }catch(ex){ toast(ex.message); }
 });
+
+/* ------------------------------------------------------- compte encaisseur */
+function payoutPill(configured){
+  return '<span class="pill' + (configured ? " green" : " red") + '">' +
+    (configured ? "active" : "disabled") + '</span>';
+}
+
+async function loadPayoutAccount(){
+  var box = document.getElementById("payoutStatus");
+  try{
+    var d = await api("/api/admin/payments/account");
+    box.innerHTML =
+      '<div class="row"><b>Status</b>' + payoutPill(d.configured) + '</div>' +
+      '<div class="row" style="margin-top:8px"><span>Source</span><b>' +
+        (d.source === "admin_console" ? "set from this app" : d.source === "environment" ? "server environment" : "—") + '</b></div>' +
+      (d.secret_key ? '<div class="row" style="margin-top:8px"><span>Secret key</span><b>' + esc(d.secret_key) + '</b></div>' : '') +
+      (d.publishable_key ? '<div class="row" style="margin-top:8px"><span>Publishable key</span><b>' + esc(d.publishable_key) + '</b></div>' : '') +
+      (d.hint ? '<div class="row" style="margin-top:8px"><span>Label</span><b>' + esc(d.hint) + '</b></div>' : '') +
+      (d.updated_at ? '<p class="muted" style="margin:10px 0 0;font-size:11px">Changed ' + timeOf(d.updated_at) + '</p>' : '');
+  }catch(e){
+    box.innerHTML = '<p class="muted">' + esc(e.message) + '</p>';
+  }
+}
+
+document.getElementById("payoutSave").onclick = async function(){
+  var btn = this, msg = document.getElementById("payoutMsg");
+  var secret = document.getElementById("payoutSecret").value.trim();
+  var pub = document.getElementById("payoutPublishable").value.trim();
+  var label = document.getElementById("payoutLabel").value.trim() || "Stripe account";
+  if(!secret && !pub){ msg.textContent = "Enter at least the secret key."; return; }
+  btn.disabled = true; btn.textContent = "Verifying with Stripe…"; msg.textContent = "";
+  try{
+    var d = await api("/api/admin/payments/account", { method: "PUT", body: {
+      secret_key: secret, publishable_key: pub, label: label
+    }});
+    msg.textContent = d.message + (d.account && typeof d.account.livemode === "boolean"
+      ? " Mode: " + (d.account.livemode ? "LIVE (real money)" : "test")
+      : "");
+    document.getElementById("payoutSecret").value = "";
+    document.getElementById("payoutPublishable").value = "";
+    loadPayoutAccount(); loadSettings(); loadOverview();
+  }catch(e){
+    msg.textContent = e.message;
+  }finally{
+    btn.disabled = false; btn.textContent = "Verify & activate";
+  }
+};
+
+document.getElementById("payoutClear").onclick = async function(){
+  if(!confirm("Disable card payments and remove the stored keys?")) return;
+  try{
+    var d = await api("/api/admin/payments/account", { method: "DELETE" });
+    document.getElementById("payoutMsg").textContent = d.message;
+    loadPayoutAccount(); loadSettings();
+  }catch(e){ document.getElementById("payoutMsg").textContent = e.message; }
+};
 
 /* --------------------------------------------------------------- réglages */
 async function loadSettings(){

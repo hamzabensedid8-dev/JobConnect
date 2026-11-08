@@ -489,3 +489,26 @@ html[data-theme="dark"] .sub-required { background: rgba(255,193,7,.14); color: 
 .pay-page h2 { font: 800 26px Manrope; margin: 0 0 10px; }
 .pay-status { margin: 18px auto; padding: 16px; border-radius: 12px; background: var(--surface-2); font-size: 13px; max-width: 460px; }
 .pay-status.ok { background: #e3f7ec; color: #0f7a53; }
+
+/* ============================== identité visuelle ============================== */
+
+.logo { gap: 11px; }
+.logo-img {
+  width: 46px; height: 46px; object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+  padding: 2px;
+  box-shadow: 0 4px 14px rgba(11, 27, 73, .16);
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease);
+}
+.logo:hover .logo-img { transform: translateY(-1px) scale(1.03); box-shadow: 0 8px 20px rgba(11, 27, 73, .22); }
+.logo span { line-height: 1.15; }
+
+html[data-theme="dark"] .logo-img { background: #f4f7ff; box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
+
+footer .logo-img { width: 40px; height: 40px; }
+
+@media (max-width: 580px) {
+  .logo-img { width: 40px; height: 40px; }
+  .logo small { font-size: 9px; }
+}

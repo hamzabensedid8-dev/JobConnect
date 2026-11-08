@@ -75,6 +75,7 @@ Run, in order, against the Supabase project (SQL editor or
 schema.sql
 schema_messaging.sql
 schema_billing.sql
+schema_credentials.sql   -- pgcrypto credentials + payout account audit
 ```
 
 Then create the first administrator (never commit this password):
@@ -98,13 +99,38 @@ npm run deploy            # build.js + scripts/deploy.js
 1. Create a Stripe account and switch to live keys when ready.
 2. Add a webhook endpoint pointing at
    `https://<your-worker>/api/webhooks/stripe`, subscribed to
-   `checkout.session.completed`, `checkout.session.expired` and
-   `payment_intent.payment_failed`.
+   `checkout.session.completed`, `payment_intent.succeeded`,
+   `checkout.session.expired` and `payment_intent.payment_failed`.
 3. Put the signing secret in `STRIPE_WEBHOOK_SECRET` and the secret key in
-   `STRIPE_SECRET_KEY`, then redeploy.
+   `STRIPE_SECRET_KEY`, then redeploy — or skip the secrets and set the
+   receiving account from the admin console (next section).
 
-Cards are typed on Stripe's hosted page: JobConnect never sees or stores card
-data, which keeps the integration out of most PCI scope.
+The public site shows an e-commerce style card form (card number, expiry, CVC)
+built with **Stripe Elements**. The fields are Stripe-hosted iframes: the card
+number never reaches JobConnect servers, and the CVC is never stored anywhere —
+Visa/Mastercard rules forbid it. If Elements cannot load, the checkout falls
+back to the Stripe-hosted page, same account, same payment.
+
+### 3b. Changing the account that receives the money
+
+The APK admin console has a **Money** tab. Paste the `sk_live_…` /
+`sk_test_…` key (plus the `pk_…` publishable key used by the card form) of the
+account that should collect payments, press **Verify & activate**:
+
+* the key is first checked against `https://api.stripe.com/v1/balance`, so a
+  wrong or revoked key is rejected instead of silently stored;
+* it is then encrypted with `pgcrypto` (`pgp_sym_encrypt`) using
+  `CREDENTIAL_KEY` and written to `integration_credentials`; the database never
+  holds the passphrase;
+* `GET /api/admin/payments/account` only ever returns the masked key
+  (`sk_live_…4f2a`), the source (`admin_console` or `environment`) and the date;
+* the switch applies to new payments immediately — no redeploy, no downtime —
+  and every change is written to the audit log.
+
+Paying *onto a card number* is not something a merchant can do: money is
+received on a merchant/Stripe account, then paid out to the bank account or
+debit card linked to it. Switching the keys above is the compliant equivalent
+of "receive the money on another card".
 
 ### 4. E-mail
 
@@ -150,6 +176,16 @@ to the run and published as a release asset.
 | `GET/POST` | `/api/chat/conversations` | session |
 | `GET/POST` | `/api/chat/conversations/:id/messages` | participants |
 | `DELETE` | `/api/admin/chat/messages/:id` · `/conversations/:id` | admin only — deletes for both sides |
+
+### Payments and receiving account
+
+| Method | Route | Who | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/payments/intent` | candidate | Creates the PaymentIntent for the inline card form |
+| GET | `/api/payments/by-reference` | payer, admin | Status of a payment after the card form redirect |
+| GET | `/api/admin/payments/account` | admin | Masked receiving account + source |
+| PUT | `/api/admin/payments/account` | admin | Verify with Stripe, encrypt and activate a receiving account |
+| DELETE | `/api/admin/payments/account` | admin | Disable card payments and delete the stored keys |
 
 ## Security
 
