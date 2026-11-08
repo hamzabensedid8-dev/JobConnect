@@ -523,9 +523,25 @@ footer .logo-img { width: 40px; height: 40px; }
   max-height: calc(100vh - 48px);
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   margin: auto;
   scrollbar-width: thin;
+  /* le bouton principal reste toujours atteignable, même si le clavier
+     virtuel réduit la zone visible sur téléphone */
+  display: flex;
+  flex-direction: column;
+}
+.modal-card > * { flex: 0 0 auto; }
+#modalContent { display: flex; flex-direction: column; min-height: 0; }
+#modalContent form { display: flex; flex-direction: column; gap: 10px; }
+#modalContent form > button.btn.primary {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 4px;
+  padding-bottom: 14px;
+  box-shadow: 0 -10px 14px -8px rgba(11, 27, 73, .18);
 }
 .modal-card::-webkit-scrollbar { width: 10px; }
 .modal-card::-webkit-scrollbar-thumb { background: rgba(120, 140, 180, .45); border-radius: 8px; }

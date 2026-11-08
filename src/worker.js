@@ -2555,6 +2555,9 @@ function b64ToBytes(b64) {
   return out;
 }
 
+/** Empreinte du déploiement, remplacée par build.js. */
+const VERSION = typeof __VERSION__ === 'string' ? __VERSION__ : 'dev';
+
 function serveStatic(url) {
   const assets = typeof __ASSETS__ === 'object' ? __ASSETS__ : {};
   const pathname = decodeURIComponent(url.pathname);
@@ -2565,15 +2568,23 @@ function serveStatic(url) {
     const ext = extensionOf(key) || '.html';
     const isImage = file && typeof file === 'object' && file.b64 !== undefined;
     const body = isImage ? b64ToBytes(file.b64) : (typeof file === 'object' ? file.text : file);
+    // Le HTML n'est jamais mis en cache : il porte les URL versionnées des
+    // scripts. Les fichiers versionnés (?v=empreinte) sont immuables, donc un
+    // déploiement est visible immédiatement, sans vidage de cache.
+    const versioned = url.searchParams.has('v');
+    const cacheControl =
+      ext === '.html'
+        ? 'no-store, must-revalidate'
+        : isImage
+          ? 'public, max-age=604800, immutable'
+          : versioned
+            ? 'public, max-age=31536000, immutable'
+            : 'public, max-age=0, must-revalidate';
     return new Response(body, {
       headers: {
         'content-type': MIME[ext] || 'application/octet-stream',
-        'cache-control':
-          ext === '.html'
-            ? 'public, max-age=0, must-revalidate'
-            : isImage
-              ? 'public, max-age=604800, immutable'
-              : 'public, max-age=3600'
+        'cache-control': cacheControl,
+        ...(ext === '.html' ? { 'x-jc-version': VERSION } : {})
       }
     });
   }
@@ -2581,7 +2592,11 @@ function serveStatic(url) {
   // Single-page fallback.
   if (assets['index.html'] !== undefined && !/\.[a-z0-9]+$/i.test(key)) {
     return new Response(assets['index.html'].text, {
-      headers: { 'content-type': MIME['.html'], 'cache-control': 'public, max-age=0, must-revalidate' }
+      headers: {
+        'content-type': MIME['.html'],
+        'cache-control': 'no-store, must-revalidate',
+        'x-jc-version': VERSION
+      }
     });
   }
 

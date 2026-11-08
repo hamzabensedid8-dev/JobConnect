@@ -108,7 +108,7 @@ function emailLayout(title, bodyHtml, footer = '') {
       ${footer ? `<p style="margin-top:24px;font-size:11px;color:#64718b">${footer}</p>` : ''}
     </td></tr>
     <tr><td style="padding:16px 26px;background:#f4f7ff;font-size:11px;color:#64718b">
-      JobConnect · international work contracts · contact@jobconnect.example
+      JobConnect · international work contracts · jc.jobconnectdz.workers.dev · contact@jobconnectdz.workers.dev
     </td></tr>
   </table></td></tr></table></body></html>`;
 }
