@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="JobConnect — international work contract requests and recruitment.">
+<title>JobConnect — Work without borders</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><a class="logo" href="#"><span class="mark">JC</span><span>JobConnect<small>Work without borders</small></span></a>
+<nav><a href="#offres">Jobs</a><a href="#demande">Request a contract</a><a href="#suivi">Track a request</a><a href="#plans">Premium plans</a></nav>
+<div class="top-actions"><button class="btn light" data-open="login">Log in</button><button class="btn primary" data-open="register">Create account</button></div><button class="hamb" id="hamb">☰</button></header>
+<main>
+<section class="hero"><div class="hero-copy"><span class="eyebrow">🌍 A career without borders</span><h1>Your next work contract <em>starts here.</em></h1><p>Discover international opportunities, submit your request and track every step with your personal reference code.</p><div class="hero-actions"><a class="btn primary" href="#demande">Submit a request ↗</a><a class="btn light" href="#offres">Browse jobs</a></div><div class="trust">✓ Trackable requests　 ✓ Resume applications　 ✓ International recruitment</div></div><div class="hero-visual"><div class="globe">🌐</div><div class="float-card f1">✈️ International opportunities</div><div class="float-card f2">✓ Your request is trackable</div><div class="orbit"></div></div></section>
+<section class="stats"><div><b>01</b><span>Submit your request</span></div><div><b>02</b><span>Get your reference</span></div><div><b>03</b><span>Track its progress</span></div></section>
+<section class="section" id="demande"><div class="section-head"><span class="eyebrow">Candidates worldwide</span><h2>Work contract request</h2><p>Complete this form. Your reference code will appear after submission.</p></div>
+<form id="requestForm" class="panel form-grid" enctype="multipart/form-data">
+<label>Full name *<input name="full_name" required placeholder="Your full name"></label><label>Email address *<input name="email" type="email" required placeholder="vous@exemple.com"></label>
+<label>Phone number with country code<input name="phone" placeholder="+33 6 00 00 00 00"></label><label>Nationalité<input name="nationality" placeholder="Your nationality"></label>
+<label>Country of residence<input name="residence_country" placeholder="Where you live"></label><label>Preferred work country *<input name="target_country" required placeholder="Ex. Canada, Allemagne, France..."></label>
+<label>Profession / desired role *<input name="profession" required placeholder="e.g. Technician, nurse, software developer..."></label><label>Contract type *<select name="contract_type" required><option value="">Select</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Seasonal</option><option>Internship</option><option>Apprenticeship</option><option>Freelance</option></select></label>
+<label>Professional experience<select name="experience"><option value="">Select</option><option>Entry level</option><option>Less than 2 years</option><option>2–5 years</option><option>5–10 years</option><option>More than 10 years</option></select></label>
+<label class="wide">Tell us about your goals / skills<textarea name="message" rows="4" placeholder="Briefly describe your experience and expectations..."></textarea></label>
+<label class="wide">Resume (PDF, DOC or DOCX — 5 MB maximum)<input type="file" name="cv" accept=".pdf,.doc,.docx"></label>
+<label class="check wide"><input type="checkbox" required> I agree that my information may be used to process my request. *</label>
+<div class="wide"><button class="btn primary" type="submit">Submit my request →</button><span class="form-note" id="requestMessage"></span></div>
+<div class="wide result hidden" id="referenceResult" aria-live="polite"></div></form></section>
+<section class="section soft" id="suivi"><div class="section-head"><span class="eyebrow">Transparent tracking</span><h2>What is the status of your request?</h2><p>Enter the reference code you received after submitting your form.</p></div><form id="trackForm" class="track panel"><input name="reference" required placeholder="Ex. JC-2026-A1B2C3D4"><button class="btn primary">Track my request</button></form><div id="trackResult" class="track-result hidden"></div></section>
+<section class="section" id="offres"><div class="section-head"><span class="eyebrow">International recruitment</span><h2>International job openings</h2><p>Browse jobs posted by recruiters and apply with your resume.</p></div><div class="job-search panel"><input id="jobTerm" placeholder="Role, company..."><input id="jobCountry" placeholder="Country"><select id="jobType"><option value="">All contract types</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Internship</option><option>Freelance</option></select><button class="btn primary" id="jobSearch">Search</button></div><div id="jobs" class="jobs"><p class="muted">Loading jobs...</p></div></section>
+<section class="section soft"><div class="section-head"><span class="eyebrow">For employers</span><h2>Hire the talent you need</h2><p>Create an employer account, publish opportunities and receive applications.</p><button class="btn primary" data-open="register">Become an employer →</button></div></section>
+<section class="section" id="plans"><div class="section-head"><span class="eyebrow">Premium plans</span><h2>Go further with Premium</h2><p>Optional upgrades for candidates and recruiters. Prices are proposed examples; online payment is not enabled yet.</p></div>
+<div class="plans">
+<article class="plan"><span class="eyebrow">Candidates</span><h3>Candidate Premium</h3><div class="price">$7.99 <small>/ month</small></div><ul><li>Priority review of your contract request</li><li>Profile highlighted to recruiters</li><li>Unlimited applications</li><li>Email alerts for matching jobs</li></ul><button class="btn light choose-plan" data-plan="candidate_premium">Choose Candidate Premium</button></article>
+<article class="plan featured"><span class="eyebrow">Employers</span><h3>Recruiter Premium</h3><div class="price">$29.99 <small>/ month</small></div><ul><li>Unlimited job posts, published faster</li><li>Full searchable candidate database</li><li>Advanced filters and saved searches</li><li>Priority support</li></ul><button class="btn primary choose-plan" data-plan="recruiter_premium">Choose Recruiter Premium</button></article>
+</div><p class="pricing-note">Your subscription request is recorded as <b>pending payment</b> until a payment provider is connected. No card details are collected on this site.</p></section>
+</main>
+<footer><a class="logo" href="#"><span class="mark">JC</span><span>JobConnect<small>Work without borders</small></span></a><span>© 2026 JobConnect · International platform</span><span>Contact : contact@jobconnect.example</span></footer>
+<div class="modal hidden" id="modal"><div class="modal-card"><button class="close" id="closeModal">×</button><div id="modalContent"></div></div></div>
+<div id="toast" class="toast hidden"></div><script src="/app.js"></script></body></html>
