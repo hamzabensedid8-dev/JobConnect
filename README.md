@@ -4,7 +4,9 @@ Work-contract requests and international recruitment: candidates submit a contra
 request and receive a trackable reference code, recruiters publish jobs and receive
 applications with resumes, admins moderate everything.
 
-**Live:** <https://jobconnect-api.jobconnect-hbz.workers.dev>
+**Live:** <https://jc.jobconnectdz.workers.dev>
+
+**Android app:** built by GitHub Actions (`.github/workflows/android.yml`), APK attached to every run. The admin console exists **only** inside that APK.
 
 ---
 
@@ -17,6 +19,8 @@ applications with resumes, admins moderate everything.
 | Resume storage | Supabase Storage — **private** bucket `cvs` |
 | Password hashing | Postgres `pgcrypto` (`crypt` / bcrypt cost 11) via RPC |
 | Sessions | HS256 JWT signed with WebCrypto, 12 h expiry |
+| Messaging | Telegram-style threads, polling (no websockets needed) |
+| Android | WebView wrapper + bundled admin console, WorkManager notifications |
 | Source | GitHub (this repo) |
 
 The whole app — API and static frontend — is one Worker. `/api/*` is handled by the

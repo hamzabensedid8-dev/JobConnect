@@ -24,8 +24,8 @@ function check(name, ok, detail = '') {
   }
 }
 
-async function call(path, { method = 'GET', token, body, form } = {}) {
-  const headers = {};
+async function call(path, { method = 'GET', token, body, form, headers: extraHeaders = {} } = {}) {
+  const headers = { ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
   let payload;
   if (form) {
@@ -107,7 +107,12 @@ r = await call('/api/auth/register', { method: 'POST', form: recruiterForm(recEm
 const recToken = r.data.token;
 check('recruiter registers without CV', r.status === 201 && !!recToken, `got ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
 
-r = await call('/api/auth/login', { method: 'POST', body: { email: 'admin@jobconnect.example', password: ADMIN_PASSWORD } });
+const ADMIN_CLIENT_KEY = process.env.ADMIN_CLIENT_KEY || (await readFile('/tmp/jc/adminkey.txt', 'utf8').catch(() => '')).trim();
+r = await call('/api/auth/login', {
+  method: 'POST',
+  headers: { 'x-jc-client-key': ADMIN_CLIENT_KEY },
+  body: { email: 'admin@jobconnect.example', password: ADMIN_PASSWORD }
+});
 const adminToken = r.data.token;
 check('admin logs in', r.status === 200 && !!adminToken, `got ${r.status} ${JSON.stringify(r.data).slice(0, 160)}`);
 
