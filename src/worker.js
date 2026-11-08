@@ -2558,6 +2558,14 @@ function b64ToBytes(b64) {
 /** Empreinte du déploiement, remplacée par build.js. */
 const VERSION = typeof __VERSION__ === 'string' ? __VERSION__ : 'dev';
 
+/**
+ * Adresse publique officielle (sans « dz »).
+ * Les anciennes adresses techniques restent valables mais renvoient vers elle,
+ * pour qu'un lien déjà partagé ne casse jamais.
+ */
+const CANONICAL_HOST = 'jc-careers.jobconnectdz.workers.dev';
+const LEGACY_HOSTS = new Set(['jc.jobconnectdz.workers.dev']);
+
 function serveStatic(url) {
   const assets = typeof __ASSETS__ === 'object' ? __ASSETS__ : {};
   const pathname = decodeURIComponent(url.pathname);
@@ -2608,6 +2616,12 @@ function serveStatic(url) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    // redirection permanente depuis l'ancienne adresse vers l'adresse courte
+    if (LEGACY_HOSTS.has(url.hostname) && url.pathname !== '/api/health') {
+      const target = new URL(url.pathname + url.search, `https://${CANONICAL_HOST}`);
+      return Response.redirect(target.toString(), 308);
+    }
 
     if (url.pathname.startsWith('/api/')) {
       try {

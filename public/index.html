@@ -3,17 +3,41 @@
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="JobConnect — international work contracts, internships and language stays. Candidates apply, track their request and receive a signed contract.">
-<title>JobConnect — Work without borders</title><link rel="icon" href="/brand/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="16x16" href="/brand/icon-16.png"><link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png"><link rel="icon" type="image/png" sizes="48x48" href="/brand/icon-48.png"><link rel="apple-touch-icon" sizes="180x180" href="/brand/icon-180.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b1b49"><meta name="apple-mobile-web-app-title" content="JobConnect"><meta property="og:image" content="/brand/logo-full.png"><meta property="og:title" content="JobConnect — Work without borders"><meta property="og:description" content="International work contracts, internships and language stays. Find, apply, get hired globally."><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css"><script>(function(){try{var t=localStorage.getItem("jc_theme");if(!t)t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<title>JobConnect — Work without borders</title><link rel="icon" href="/brand/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="16x16" href="/brand/icon-16.png"><link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png"><link rel="icon" type="image/png" sizes="48x48" href="/brand/icon-48.png"><link rel="apple-touch-icon" sizes="180x180" href="/brand/icon-180.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#060b18"><meta name="apple-mobile-web-app-title" content="JobConnect"><meta property="og:image" content="/brand/logo-full.png"><meta property="og:title" content="JobConnect — Work without borders"><meta property="og:description" content="International work contracts, internships and language stays. Find, apply, get hired globally."><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css"><script>document.documentElement.setAttribute("data-theme","dark");document.documentElement.style.colorScheme="dark";</script>
 </head>
 <body>
-<div class="bg-aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-<div class="bg-noise" aria-hidden="true"></div>
+<div id="splash"><img src="/brand/icon-192.png" alt="JobConnect"><b>JobConnect</b><small>International work contracts · since 2023</small></div>
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<nav class="side-nav" id="sideNav" aria-label="Main menu">
+  <div class="navbrand">
+    <img src="/brand/icon-192.png" alt="JobConnect">
+    <div style="flex:1;min-width:0"><b>JobConnect</b><br><small>Find · Apply · Get Hired</small></div>
+    <button class="btn light nav-close" id="drawerClose" aria-label="Close menu">✕</button>
+  </div>
+  <div class="navgroup">Discover</div>
+  <button class="navbtn on" data-goto="#accueil"><span>Home &amp; presentation</span></button>
+  <button class="navbtn" data-goto="#comment"><span>How it works</span></button>
+  <button class="navbtn" data-goto="#contrats"><span>Contract types</span></button>
+  <button class="navbtn" data-goto="#categories"><span>Openings by category</span></button>
+  <div class="navgroup">Apply</div>
+  <button class="navbtn" data-goto="#demande"><span>Submit a request</span></button>
+  <button class="navbtn" data-status="1"><span>Track a request</span></button>
+  <button class="navbtn" data-goto="#offres"><span>Jobs board</span></button>
+  <button class="navbtn" data-goto="#stages"><span>Internships &amp; language stays</span></button>
+  <div class="navgroup">Prices</div>
+  <button class="navbtn" data-goto="#plans"><span>Free &amp; paid contracts</span></button>
+  <button class="navbtn" data-goto="#plans-recruiter"><span>Recruiter plans</span></button>
+  <button class="navbtn" data-goto="#paiement"><span>Card payment</span></button>
+  <div class="navgroup">Rules</div>
+  <button class="navbtn" data-goto="#reglement"><span>Terms &amp; conditions</span></button>
+  <button class="navbtn" data-goto="#reglement-confidentialite"><span>Privacy</span></button>
+  <button class="navbtn" data-goto="#reglement-remboursement"><span>Refunds</span></button>
+</nav>
 
 <header class="top">
   <a class="logo" href="#accueil"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="44" height="44"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a>
   <div class="top-actions">
-    <button class="btn light" id="menuToggle" aria-expanded="false" aria-controls="categoryMenu">☰ Menu</button>
-    <button class="btn icon theme-toggle" id="themeToggle" title="Switch theme" aria-label="Switch theme">🌙</button>
+    <button class="btn light" id="navToggle" aria-expanded="false" aria-controls="sideNav">☰ Menu</button>
     <button class="btn light" data-status="1">Check status</button>
     <button class="btn light" data-open="login">Log in</button>
     <button class="btn primary" data-open="register">Create account</button>
@@ -365,9 +389,16 @@
 <footer>
   <a class="logo" href="#accueil"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="40" height="40"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a>
   <span>© 2023–2026 JobConnect · International platform</span>
-  <span>Contact : contact@jobconnectdz.workers.dev</span>
+  <span>Contact : contact@jc-careers.workers.dev</span>
 </footer>
 
+<nav class="bottom-nav" id="bottomNav" aria-label="Quick navigation">
+  <button class="tabbtn on" data-goto="#accueil"><i>🏠</i><span>Home</span></button>
+  <button class="tabbtn" data-goto="#categories"><i>🗂️</i><span>Categories</span></button>
+  <button class="tabbtn" data-goto="#demande"><i>📝</i><span>Request</span></button>
+  <button class="tabbtn" data-status="1"><i>🔎</i><span>Status</span></button>
+  <button class="tabbtn" data-goto="#plans"><i>💳</i><span>Prices</span></button>
+</nav>
 <div class="modal hidden" id="modal"><div class="modal-card"><button class="close" id="closeModal">×</button><div id="modalContent"></div></div></div>
 <datalist id="countriesList"></datalist><datalist id="nationalitiesList"></datalist><datalist id="professionsList"></datalist>
 <div id="toast" class="toast hidden"></div>

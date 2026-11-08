@@ -4,7 +4,7 @@ Candidates submit contract requests for free, get a reference code and track the
 outcome. Recruiters publish contracts, candidates pay a JobConnect fee plus the
 recruiter's price by card, and every decision carries a reason.
 
-**Web:** <https://jc.jobconnectdz.workers.dev>
+**Web:** <https://jc-careers.jobconnectdz.workers.dev>
 **Android (admin console included):** see the latest release on GitHub
 **Interface:** English only, responsive (mobile-first), light and dark themes
 

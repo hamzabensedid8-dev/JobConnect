@@ -34,21 +34,123 @@ if(!token){openModal("register",plan);const roleEl=$("#modalContent select[name=
 if(currentUser.role!=="recruiter"){toast("Recruiter plans are only available to recruiter accounts.");return}
 try{const d=await api("/api/subscriptions/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
 if(d.checkout_url){window.location.href=d.checkout_url}else{toast(d.message||"Subscription started.")}}catch(err){toast(err.message)}}));
-/* ---------- menu repliable, organisé par catégorie ---------- */
+/* ---------- drawer latéral + barre d'onglets (méthode du modèle) ---------- */
 (function(){
-  var btn=document.getElementById("menuToggle");
-  var menu=document.getElementById("categoryMenu");
-  if(!btn||!menu)return;
-  function close(){ menu.hidden=true; btn.setAttribute("aria-expanded","false"); btn.innerHTML="☰ Menu"; }
-  btn.addEventListener("click",function(){
-    var open=menu.hidden;
-    menu.hidden=!open;
-    btn.setAttribute("aria-expanded",open?"true":"false");
-    btn.innerHTML=open?"× Close":"☰ Menu";
+  var nav=document.getElementById("sideNav");
+  var backdrop=document.getElementById("drawerBackdrop");
+  var toggle=document.getElementById("navToggle");
+  var closeBtn=document.getElementById("drawerClose");
+  var tabs=document.querySelectorAll("#bottomNav .tabbtn");
+  if(!nav)return;
+
+  function isMobile(){ return window.innerWidth < 900; }
+  function setOpen(open){
+    if(isMobile()){
+      nav.classList.toggle("open",open);
+      if(backdrop)backdrop.classList.toggle("open",open);
+      if(toggle){toggle.innerHTML=open?"✕":"☰ Menu";toggle.setAttribute("aria-expanded",open?"true":"false");}
+      document.body.style.overflow=open?"hidden":"";
+    }else{
+      document.body.classList.toggle("nav-collapsed",!open);
+      nav.classList.toggle("open",open);
+      if(toggle){toggle.innerHTML=open?"✕":"☰ Menu";toggle.setAttribute("aria-expanded",open?"true":"false");}
+    }
+  }
+  // sur grand écran le menu est ouvert par défaut
+  function sync(){
+    if(isMobile()){ setOpen(false); document.body.classList.remove("nav-collapsed"); }
+    else setOpen(true);
+  }
+  sync();
+  window.addEventListener("resize",sync);
+  if(toggle)toggle.addEventListener("click",function(){
+    var open=isMobile()? !nav.classList.contains("open") : document.body.classList.contains("nav-collapsed");
+    setOpen(open);
   });
-  menu.addEventListener("click",function(e){
-    if(e.target.tagName==="A"||e.target.closest("[data-status]"))close();
+  if(closeBtn)closeBtn.addEventListener("click",function(){ setOpen(false); });
+  if(backdrop)backdrop.addEventListener("click",function(){ setOpen(false); });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape"&&isMobile())setOpen(false); });
+
+  function markActive(sel){
+    document.querySelectorAll(".side-nav .navbtn").forEach(function(b){
+      b.classList.toggle("on", b.dataset.goto===sel);
+    });
+    tabs.forEach(function(t){ t.classList.toggle("on", t.dataset.goto===sel); });
+  }
+
+  document.addEventListener("click",function(e){
+    var b=e.target.closest("[data-goto]");
+    if(!b)return;
+    var sel=b.dataset.goto;
+    var target=document.querySelector(sel);
+    if(!target)return;
+    e.preventDefault();
+    target.scrollIntoView({behavior:"smooth",block:"start"});
+    markActive(sel);
+    if(isMobile())setOpen(false);
   });
+
+  // la navigation reflète la section visible
+  var sections=[].slice.call(document.querySelectorAll("main > section[id]"));
+  if("IntersectionObserver" in window && sections.length){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){
+          var id="#"+en.target.id;
+          document.querySelectorAll(".side-nav .navbtn").forEach(function(b){
+            b.classList.toggle("on",b.dataset.goto===id);
+          });
+          tabs.forEach(function(t){t.classList.toggle("on",t.dataset.goto===id);});
+        }
+      });
+    },{rootMargin:"-45% 0px -50% 0px"});
+    sections.forEach(function(sec){io.observe(sec);});
+  }
+})();
+
+/* ---------- splash de démarrage ---------- */
+(function(){
+  var sp=document.getElementById("splash");
+  if(!sp)return;
+  function hide(){ sp.classList.add("hide"); setTimeout(function(){ if(sp&&sp.parentNode)sp.parentNode.removeChild(sp); },600); }
+  window.addEventListener("load",function(){ setTimeout(hide,420); });
+  setTimeout(hide,2200);
+})();
+
+/* ---------- ripple sur les boutons + apparition au défilement ---------- */
+(function(){
+  document.addEventListener("pointerdown",function(e){
+    var b=e.target.closest?e.target.closest("button,.btn"):null;
+    if(!b)return;
+    var r=b.getBoundingClientRect(),size=Math.max(r.width,r.height)*1.1;
+    var s=document.createElement("span");
+    s.className="ripple";
+    s.style.width=s.style.height=size+"px";
+    s.style.left=(e.clientX-r.left-size/2)+"px";
+    s.style.top=(e.clientY-r.top-size/2)+"px";
+    b.appendChild(s);
+    setTimeout(function(){ if(s.parentNode)s.parentNode.removeChild(s); },650);
+  },true);
+
+  document.documentElement.classList.add("js-rv");
+  var io=null;
+  if("IntersectionObserver" in window){
+    io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add("rv-in"); io.unobserve(en.target); }
+      });
+    },{rootMargin:"0px 0px -6% 0px",threshold:.08});
+  }
+  function observe(){
+    document.querySelectorAll(".panel,.job,.plan,.toggle,.feature,.stat,.track-result,#dashboard").forEach(function(el){
+      if(el.dataset.rv)return;
+      el.dataset.rv="1";
+      el.classList.add("rv");
+      if(io)io.observe(el); else el.classList.add("rv-in");
+    });
+  }
+  observe();
+  window.JCObserve=observe;
 })();
 
 /* ---------- liste des catégories, dépliée une par une ---------- */
@@ -107,10 +209,13 @@ window.JCOpenStatus=openStatusWindow;
 loadJobs();
 if(token&&currentUser)renderDashboard();
 
-/* ---------- thème clair / sombre ---------- */
+/* ---------- thème : sombre premium uniquement (méthode du modèle) ---------- */
 (function(){
   var root=document.documentElement;
+  root.setAttribute("data-theme","dark");
+  try{localStorage.setItem("jc_theme","dark");}catch(e){}
   var btn=document.getElementById("themeToggle");
+  if(!btn)return;
   function paint(){
     var dark=root.getAttribute("data-theme")==="dark";
     if(btn)btn.textContent=dark?"☀️":"🌙";

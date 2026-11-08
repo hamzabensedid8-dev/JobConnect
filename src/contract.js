@@ -40,7 +40,7 @@ export function buildContractPdf(contract, logo) {
     logo,
     title: 'Employment contract',
     subtitle: `${orText(c.contract_number, 'Draft')} · Issued by JobConnect`,
-    footer: `JobConnect · contract ${orText(c.contract_number, 'draft')} · jc.jobconnectdz.workers.dev`
+    footer: `JobConnect · contract ${orText(c.contract_number, 'draft')} · jc-careers.jobconnectdz.workers.dev`
   });
 
   /* ---------------------------------------------------------- parties --- */
