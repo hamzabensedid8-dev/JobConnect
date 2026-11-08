@@ -61,11 +61,59 @@
     "Uruguayan","Uzbek","Vanuatuan","Venezuelan","Vietnamese","Welsh","Yemeni","Zambian","Zimbabwean"
   ];
 
-  var CONTRACT_TYPES = ["Permanent", "Fixed-term", "Temporary", "Seasonal", "Internship", "Apprenticeship", "Freelance"];
+  var CONTRACT_TYPES = ["Permanent", "Fixed-term", "Temporary", "Seasonal", "Internship", "Language stay", "Apprenticeship", "Freelance"];
+
+  // Professions rattachées à chaque catégorie (menu repliable « tout par catégorie »).
+  var PROFESSIONS_BY_CATEGORY = {
+    "Healthcare & Nursing": ["Nurse", "Caregiver", "Midwife", "Physiotherapist", "Radiology Technician"],
+    "Information Technology": ["Software Developer", "Data Analyst", "Network Technician", "Cybersecurity Analyst", "Support Technician"],
+    "Engineering": ["Civil Engineer", "Mechanical Engineer", "Electrical Engineer", "Site Engineer"],
+    "Construction & Trades": ["Mason", "Carpenter", "Electrician", "Plumber", "Welder", "Scaffolder"],
+    "Skilled Trades & Manufacturing": ["Machine Operator", "Quality Controller", "Assembly Worker", "CNC Operator"],
+    "Logistics & Transport": ["Warehouse Worker", "Forklift Operator", "Truck Driver", "Dispatcher"],
+    "Hospitality & Tourism": ["Hotel Receptionist", "Waiter", "Housekeeper", "Tour Guide"],
+    "Food & Catering": ["Chef", "Pastry Chef", "Kitchen Assistant", "Barista"],
+    "Agriculture & Farming": ["Farm Worker", "Greenhouse Worker", "Livestock Handler"],
+    "Education & Training": ["Teacher", "Teaching Assistant", "Language Trainer", "Childcare Worker"],
+    "Finance & Accounting": ["Accountant", "Bookkeeper", "Financial Analyst", "Payroll Officer"],
+    "Sales & Retail": ["Sales Representative", "Store Manager", "Cashier"],
+    "Marketing & Communication": ["Marketing Officer", "Content Creator", "Community Manager"],
+    "Customer Support": ["Customer Service Agent", "Call Centre Agent", "Helpdesk Agent"],
+    "Administration & Office": ["Administrative Assistant", "Secretary", "Data Entry Clerk"],
+    "Legal": ["Legal Assistant", "Paralegal", "Compliance Officer"],
+    "Human Resources": ["HR Officer", "Recruiter", "Training Coordinator"],
+    "Social Work & Care": ["Social Worker", "Elderly Care Assistant", "Disability Support Worker"],
+    "Pharmacy & Laboratory": ["Pharmacist", "Pharmacy Assistant", "Laboratory Technician"],
+    "Automotive": ["Mechanic", "Auto Electrician", "Bodywork Technician"],
+    "Aviation": ["Cabin Crew", "Ground Handler", "Aircraft Technician"],
+    "Maritime & Offshore": ["Deckhand", "Marine Engineer", "Offshore Technician"],
+    "Energy & Utilities": ["Solar Installer", "Wind Turbine Technician", "Power Plant Operator"],
+    "Mining & Resources": ["Mine Operator", "Geologist", "Heavy Equipment Operator"],
+    "Oil & Gas": ["Pipeline Technician", "Drilling Assistant", "HSE Officer"],
+    "Textile & Garment": ["Tailor", "Machine Sewer", "Pattern Maker"],
+    "Beauty & Wellness": ["Hairdresser", "Beautician", "Massage Therapist"],
+    "Sports & Fitness": ["Fitness Coach", "Sports Instructor", "Lifeguard"],
+    "Security & Safety": ["Security Guard", "Safety Officer", "Fire Safety Technician"],
+    "Cleaning & Facility": ["Cleaner", "Facility Manager", "Window Cleaner"],
+    "Domestic & Household Work": ["Housekeeper", "Nanny", "Home Carer"],
+    "Childcare & Nanny": ["Nanny", "Au Pair", "Kindergarten Assistant"],
+    "Elderly Care": ["Elderly Care Assistant", "Live-in Carer", "Nursing Home Aide"],
+    "Dentistry": ["Dental Assistant", "Dental Hygienist", "Dentist"],
+    "Veterinary": ["Veterinary Assistant", "Animal Care Worker"],
+    "Media & Creative": ["Video Editor", "Photographer", "Graphic Designer"],
+    "Design & Architecture": ["Architect", "Draughtsman", "Interior Designer"],
+    "Real Estate": ["Property Agent", "Property Manager"],
+    "Public Sector": ["Administrative Officer", "Municipal Agent"],
+    "Research & Science": ["Research Assistant", "Lab Scientist"],
+    "Telecommunications": ["Fibre Technician", "Network Installer"],
+    "Warehouse & Storage": ["Storekeeper", "Inventory Clerk", "Picker Packer"],
+    "Driving & Delivery": ["Delivery Driver", "Bus Driver", "Courier"]
+  };
   var EXPERIENCE_LEVELS = ["Entry level", "Less than 2 years", "2–5 years", "5–10 years", "More than 10 years"];
 
   window.JC_CATALOG = {
     categories: CATEGORIES,
+    professionsByCategory: PROFESSIONS_BY_CATEGORY,
     countries: COUNTRIES,
     nationalities: NATIONALITIES,
     contractTypes: CONTRACT_TYPES,

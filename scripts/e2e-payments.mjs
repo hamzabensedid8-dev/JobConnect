@@ -29,6 +29,7 @@ async function sql(query) {
 
 async function api(path, { method = 'GET', token, body } = {}) {
   const headers = {};
+  if (ADMIN_KEY) headers['x-jc-client-key'] = ADMIN_KEY;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['content-type'] = 'application/json';
   const res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -46,7 +47,7 @@ async function sign(payload, secret, timestamp = Math.floor(Date.now() / 1000)) 
 
 const csrf = await api('/api/auth/login', {
   method: 'POST',
-  body: { email: 'admin@jobconnect.example', password: ADMIN_PW },
+  body: { password: ADMIN_PW },
   token: undefined
 }).catch(() => null);
 
@@ -54,7 +55,7 @@ const csrf = await api('/api/auth/login', {
 const loginRes = await fetch(BASE + '/api/auth/login', {
   method: 'POST',
   headers: { 'content-type': 'application/json', 'x-jc-client-key': ADMIN_KEY },
-  body: JSON.stringify({ email: 'admin@jobconnect.example', password: ADMIN_PW })
+  body: JSON.stringify({ password: ADMIN_PW })
 });
 const admin = await loginRes.json();
 const adminT = admin.token;
@@ -227,6 +228,50 @@ const intentAnon = await api('/api/payments/intent', { method: 'POST', body: { r
 check('intent protégé sans session', intentAnon.status === 401, intentAnon.status);
 const intentUnknown = await api('/api/payments/intent', { method: 'POST', token: adminT, body: { reference: 'JC-ZZZZZZ' } });
 check('intent sur référence inconnue -> 404', intentUnknown.status === 404, intentUnknown.status);
+
+console.log('\n=== CONTRATS (GÉNÉRATEUR PDF) ===');
+const dossier = 'germany/long/journey/voluntary/placement/acknowledgement/' + 'and/further/conditions/'.repeat(8);
+const ct = await api('/api/admin/contracts', {
+  method: 'POST', token: adminT,
+  body: {
+    employer_name: 'Northline Logistics GmbH', employer_address: 'Hafenstrasse 12, 20359 Hamburg',
+    employee_name: 'Yacine Boumediene', employee_address: 'Blida, Algeria', employee_nationality: 'Algerian',
+    position: 'Warehouse logistics specialist', contract_type: 'Fixed-term', country: 'Germany',
+    city: 'Hamburg', duration_months: 24, start_date: '2026-02-01', weekly_hours: 40,
+    salary: 'EUR 2,450 gross per month',
+    additional_clauses: Array.from({ length: 10 }, (_, i) =>
+      `Clause ${i + 1}: The employer provides accommodation and language training (${dossier}).`).join('\n\n'),
+    signing_place: 'Hamburg', signing_date: '2026-01-15',
+    is_free: false, fee_cents: 4900, recruiter_price_cents: 15000, currency: 'EUR'
+  }
+});
+check('contrat créé', ct.status === 201 && ct.data.contract.contract_number, ct.status);
+const ctNumber = ct.data.contract && ct.data.contract.contract_number;
+check('total = fee + prix recruteur', ct.data.contract && ct.data.contract.total_cents === 19900, ct.data.contract && ct.data.contract.total_cents);
+
+const pdfRes = await fetch(BASE + `/api/contracts/${ctNumber}/pdf`, { headers: { Authorization: `Bearer ${adminT}`, 'x-jc-client-key': ADMIN_KEY } });
+const pdfBytes = Buffer.from(await pdfRes.arrayBuffer());
+check('PDF du contrat téléchargeable', pdfRes.status === 200 && (pdfRes.headers.get('content-type') || '').includes('pdf'), pdfRes.status);
+check('PDF commence par %PDF-', pdfBytes.subarray(0, 5).toString() === '%PDF-', pdfBytes.subarray(0, 8).toString());
+check('PDF contient le logo', pdfBytes.includes(Buffer.from('/DCTDecode')));
+check('PDF paginé (plusieurs pages)', (pdfBytes.toString('latin1').match(/\/Type \/Page /g) || []).length >= 2);
+check('PDF avec pied de page numéroté', /Page 1 \//.test(pdfBytes.toString('latin1')));
+check('aucune page vide (contenu > 1000 octets/page)', pdfBytes.length > 20000, pdfBytes.length + ' octets');
+
+const ctFree = await api('/api/admin/contracts', {
+  method: 'POST', token: adminT,
+  body: { employer_name: 'Free Co', employee_name: 'Free Person', position: 'Intern', is_free: true,
+          fee_cents: 4900, recruiter_price_cents: 15000, currency: 'USD' }
+});
+check('contrat gratuit: total 0', ctFree.status === 201 && ctFree.data.contract.total_cents === 0, JSON.stringify(ctFree.data).slice(0, 120));
+const freePdf = await fetch(BASE + `/api/contracts/${ctFree.data.contract.contract_number}/pdf`, { headers: { Authorization: `Bearer ${adminT}` } });
+check('PDF gratuit téléchargeable', freePdf.status === 200, freePdf.status);
+
+const pdfAnon = await fetch(BASE + `/api/contracts/${ctNumber}/pdf`);
+check('PDF protégé sans session', pdfAnon.status === 401, pdfAnon.status);
+
+const listCt = await api('/api/admin/contracts', { token: adminT });
+check('liste des contrats pour la console', listCt.status === 200 && listCt.data.contracts.length >= 2, listCt.status);
 
 console.log(`\n${'='.repeat(56)}`);
 console.log(`RESULT: ${pass} passed, ${fail} failed`);

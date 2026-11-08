@@ -6,13 +6,13 @@ function toast(t){const el=$("#toast");el.textContent=t;el.classList.remove("hid
 async function api(url,opts={}){const headers={...(opts.headers||{})};if(token)headers.Authorization="Bearer "+token;const res=await fetch(url,{...opts,headers});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||"Une erreur est survenue.");return data}
 let pendingPlan="";
 function openModal(kind,plan){pendingPlan=plan||"";$("#modal").classList.remove("hidden");$("#modalContent").innerHTML=kind==="login"?`
-<h2>Connexion</h2><p class="muted">Access your JobConnect account.</p><form id="authForm"><input name="email" type="email" required placeholder="Email address"><input name="password" type="password" required placeholder="Mot de passe"><button class="btn primary">Se connecter</button></form>`:`
-<h2>Créer un compte</h2><p class="muted">Join the international platform.</p><form id="authForm"><input name="name" required placeholder="Full name"><input name="email" type="email" required placeholder="Email address"><input name="password" type="password" minlength="10" required placeholder="Password (at least 10 characters)"><select name="role" id="registerRole"><option value="candidate">Candidate</option><option value="recruiter">Recruiter</option></select><select name="plan" id="registerPlan"><option value="">No premium plan (free account)</option><option value="candidate_premium">Candidate Premium — $7.99/month</option><option value="recruiter_premium">Recruiter Premium — $29.99/month</option></select><label id="cvUploadLabel">Upload your CV (PDF, DOC or DOCX — max 5 MB) *<input name="cv" id="registerCv" type="file" accept=".pdf,.doc,.docx" required></label><input name="company" placeholder="Company (recruiter)"><input name="country" placeholder="Country"><button class="btn primary">Create account</button></form>`;const planSelect=$("#modalContent select[name=plan]");if(kind!=="login"&&planSelect&&pendingPlan)planSelect.value=pendingPlan}
+<h2>Log in</h2><p class="muted">Access your JobConnect account.</p><form id="authForm"><input name="email" type="email" required placeholder="Email address"><input name="password" type="password" required placeholder="Password"><button class="btn primary">Log in</button></form>`:`
+<h2>Create account</h2><p class="muted">Join the international platform. Creating an account is free.</p><form id="authForm"><input name="name" required placeholder="Full name"><input name="email" type="email" required placeholder="Email address"><input name="password" type="password" minlength="10" required placeholder="Password (at least 10 characters)"><select name="role" id="registerRole"><option value="candidate">Candidate</option><option value="recruiter">Recruiter</option></select><label id="cvUploadLabel" class="file-label">Upload your CV (PDF, DOC or DOCX — max 5 MB) *<input name="cv" id="registerCv" type="file" accept=".pdf,.doc,.docx" required></label><input name="company" placeholder="Company (recruiter only)"><input name="country" placeholder="Country"><button class="btn primary">Create account</button><p class="muted small">By creating an account you accept the <a href="#reglement" id="termsLink">terms &amp; conditions</a>.</p></form>`;const planSelect=$("#modalContent select[name=plan]");if(kind!=="login"&&planSelect&&pendingPlan)planSelect.value=pendingPlan}
 document.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openModal(b.dataset.open)));
 $("#closeModal").onclick=()=>$("#modal").classList.add("hidden");
 $("#modal").addEventListener("click",e=>{if(e.target.id==="modal")$("#modal").classList.add("hidden")});
 $("#modalContent").addEventListener("change",e=>{if(e.target.id==="registerRole"){const cv=$("#registerCv");const label=$("#cvUploadLabel");if(cv){cv.required=e.target.value==="candidate";label.hidden=e.target.value!=="candidate";}}});
-$("#modalContent").addEventListener("submit",async e=>{if(e.target.id!=="authForm")return;e.preventDefault();const fd=new FormData(e.target),body=Object.fromEntries(fd.entries());try{const url=body.name?"/api/auth/register":"/api/auth/login";const isRegister=!!body.name;const payload=isRegister?fd:JSON.stringify(body);const headers=isRegister?{}:{"Content-Type":"application/json"};const d=await api(url,{method:"POST",headers,body:payload});token=d.token;currentUser=d.user;localStorage.setItem("jc_token",token);localStorage.setItem("jc_user",JSON.stringify(currentUser));$("#modal").classList.add("hidden");toast("Bienvenue "+currentUser.name+" !");renderDashboard();if(isRegister&&body.plan){api("/api/subscriptions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan:body.plan})}).then(r=>toast(r.message)).catch(e=>toast(e.message))}}catch(err){toast(err.message)}});
+$("#modalContent").addEventListener("submit",async e=>{if(e.target.id!=="authForm")return;e.preventDefault();const fd=new FormData(e.target),body=Object.fromEntries(fd.entries());try{const url=body.name?"/api/auth/register":"/api/auth/login";const isRegister=!!body.name;const payload=isRegister?fd:JSON.stringify(body);const headers=isRegister?{}:{"Content-Type":"application/json"};const d=await api(url,{method:"POST",headers,body:payload});token=d.token;currentUser=d.user;localStorage.setItem("jc_token",token);localStorage.setItem("jc_user",JSON.stringify(currentUser));$("#modal").classList.add("hidden");toast("Bienvenue "+currentUser.name+" !");renderDashboard();if(isRegister&&body.plan&&body.role==="recruiter"){api("/api/subscriptions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan:body.plan})}).then(r=>toast(r.message)).catch(e=>toast(e.message))}}catch(err){toast(err.message)}});
 $("#requestForm").addEventListener("submit",async e=>{e.preventDefault();const btn=e.target.querySelector("button[type=submit]");btn.disabled=true;$("#requestMessage").textContent="Submitting...";try{const d=await api("/api/applications",{method:"POST",body:new FormData(e.target)});$("#referenceResult").innerHTML=`<b>✓ Your request has been submitted!</b><strong>${d.reference}</strong>Keep this code safe. Use it in the Track a request section to check your request status.`;$("#referenceResult").classList.remove("hidden");$("#requestMessage").textContent="";e.target.reset();}catch(err){$("#requestMessage").textContent=err.message}finally{btn.disabled=false}});
 $("#trackForm").addEventListener("submit",async e=>{e.preventDefault();const ref=new FormData(e.target).get("reference").trim();const box=$("#trackResult");try{const d=await api("/api/applications/track/"+encodeURIComponent(ref));const a=d.application,sla=d.application.sla||{};box.innerHTML=`<b>Request ${a.reference}</b><p><b>Role:</b> ${escapeHtml(a.profession)} · <b>Country :</b> ${escapeHtml(a.target_country)}</p><p><b>Type :</b> ${escapeHtml(a.contract_type)}</p><p><b>Status :</b> <span class="status status-${a.status}">${statusLabels[a.status]||a.status}</span></p>${a.status==="rejected"&&a.decision_reason?`<p class="reason"><b>Reason:</b> ${escapeHtml(a.decision_reason)}</p>`:""}${a.status==="accepted"&&a.decision_reason?`<p><b>Message:</b> ${escapeHtml(a.decision_reason)}</p>`:""}<p><b>Target response:</b> ${sla.target_min_minutes||5}–${sla.target_max_minutes||20} minutes ${a.status==="pending"?(sla.overdue?`<span class="sla late">in progress (${sla.elapsed_minutes} min)</span>`:`<span class="sla">${sla.remaining_minutes} min left</span>`):`<span class="sla done">answered in ${sla.elapsed_minutes} min</span>`}</p>${a.total_cents?`<p><b>Fee breakdown:</b> JobConnect ${fmtMoney(a.fee_cents,a.currency)} + recruiter ${fmtMoney(a.recruiter_price_cents,a.currency)} = <b>${fmtMoney(a.total_cents,a.currency)}</b>${a.paid_at?" · <span class='status status-accepted'>Paid</span>":" · <span class='status status-pending'>Payment pending</span>"}</p>`:""}<p><b>Last updated:</b> ${new Date(a.updated_at).toLocaleString()}</p>`;box.classList.remove("hidden")}catch(err){box.innerHTML=escapeHtml(err.message);box.classList.remove("hidden")}});
 function fmtMoney(c,cur){return "$"+((Number(c||0))/100).toFixed(2)+" "+(cur||"USD")}
@@ -34,7 +34,76 @@ if(!token){openModal("register",plan);const roleEl=$("#modalContent select[name=
 if(currentUser.role!=="recruiter"){toast("Recruiter plans are only available to recruiter accounts.");return}
 try{const d=await api("/api/subscriptions/checkout",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})});
 if(d.checkout_url){window.location.href=d.checkout_url}else{toast(d.message||"Subscription started.")}}catch(err){toast(err.message)}}));
-$("#hamb").onclick=()=>document.querySelector(".top nav").classList.toggle("open");
+/* ---------- menu repliable, organisé par catégorie ---------- */
+(function(){
+  var btn=document.getElementById("menuToggle");
+  var menu=document.getElementById("categoryMenu");
+  if(!btn||!menu)return;
+  function close(){ menu.hidden=true; btn.setAttribute("aria-expanded","false"); btn.innerHTML="☰ Menu"; }
+  btn.addEventListener("click",function(){
+    var open=menu.hidden;
+    menu.hidden=!open;
+    btn.setAttribute("aria-expanded",open?"true":"false");
+    btn.innerHTML=open?"× Close":"☰ Menu";
+  });
+  menu.addEventListener("click",function(e){
+    if(e.target.tagName==="A"||e.target.closest("[data-status]"))close();
+  });
+})();
+
+/* ---------- liste des catégories, dépliée une par une ---------- */
+(function(){
+  var host=document.getElementById("categoryList");
+  if(!host||!window.JC_CATALOG)return;
+  var map=window.JC_CATALOG.professionsByCategory||{};
+  host.innerHTML=window.JC_CATALOG.categories.map(function(cat){
+    var jobs=(map[cat]||[]);
+    return '<details class="toggle cat-item"><summary><b>'+escapeHtml(cat)+'</b><em>'+jobs.length+
+      ' profession'+(jobs.length>1?'s':'')+'</em></summary><p>'+(jobs.length?jobs.map(function(j){
+        return '<span class="tag">'+escapeHtml(j)+'</span>';}).join(""):"Open to any profile in this sector.")+
+      '</p><a class="btn light" href="#demande" data-category="'+escapeHtml(cat)+'">Request in this category</a></details>';
+  }).join("");
+  host.addEventListener("click",function(e){
+    var link=e.target.closest("[data-category]");
+    if(!link)return;
+    var sel=document.getElementById("professionCategory");
+    if(sel){sel.value=link.dataset.category;sel.dispatchEvent(new Event("change",{bubbles:true}))}
+  });
+})();
+
+/* ---------- fenêtre de suivi (check status) ---------- */
+function openStatusWindow(reference){
+  openModal("login");
+  var card=document.querySelector("#modalContent");
+  card.innerHTML='<h2>Check a request status</h2><p class="muted">Enter the reference code you received after submitting your request.</p>'+
+    '<form id="statusForm"><input name="reference" required placeholder="Ex. JC-2026-A1B2C3D4" value="'+
+    (reference?escapeHtml(reference):"")+'"><button class="btn primary">Check status</button></form>'+
+    '<div id="statusResult" class="status-window"></div>';
+  card.querySelector("#statusForm").addEventListener("submit",function(ev){
+    ev.preventDefault();
+    var ref=new FormData(this).get("reference").trim();
+    var out=card.querySelector("#statusResult");
+    out.innerHTML='<p class="muted">Checking…</p>';
+    api("/api/applications/track/"+encodeURIComponent(ref)).then(function(d){
+      var a=d.application,sla=a.sla||{};
+      out.innerHTML='<div class="metric"><b>'+escapeHtml(a.reference)+'</b>'+
+        escapeHtml(a.profession)+' · '+escapeHtml(a.target_country)+
+        '<p><span class="status status-'+a.status+'">'+(statusLabels[a.status]||a.status)+'</span>'+
+        (a.decision_reason?' · '+escapeHtml(a.decision_reason):"")+'</p>'+
+        '<p class="muted small">Target response '+(sla.target_min_minutes||5)+'–'+(sla.target_max_minutes||20)+
+        ' min'+(a.status==="pending"?' · '+(sla.remaining_minutes!=null?sla.remaining_minutes+' min left':'in progress'):'')+'</p>'+
+        (a.total_cents!=null?'<p>'+(a.total_cents?('Amount: <b>'+fmtMoney(a.total_cents,a.currency)+'</b>'):'<b>Free contract</b>')+
+        (a.contract_number?' · contract '+escapeHtml(a.contract_number):'')+'</p>':'')+'</div>';
+    }).catch(function(err){ out.innerHTML='<p class="status-error">'+escapeHtml(err.message)+'</p>'; });
+  });
+}
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-status]");
+  if(!b)return;
+  e.preventDefault();
+  openStatusWindow();
+});
+window.JCOpenStatus=openStatusWindow;
 loadJobs();
 if(token&&currentUser)renderDashboard();
 

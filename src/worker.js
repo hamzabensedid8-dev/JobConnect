@@ -30,6 +30,7 @@ import {
   buildReceiptPdf,
   slaState
 } from './modules.js';
+import { buildContractPdf, jpegSize } from './contract.js';
 
 const ONE_DAY = 60 * 60 * 24;
 const MAX_CV_BYTES = 5 * 1024 * 1024;
@@ -130,7 +131,9 @@ const PLANS = {
       'Receipts and invoices included'
     ]
   },
-  candidate_premium: {
+  // Le candidat ne paie aucun abonnement : quand un contrat est payant, le
+  // montant est réglé une seule fois, dans le contrat lui-même.
+  candidate_free: {
     role: 'candidate',
     amount_cents: 0,
     currency: 'USD',
@@ -655,24 +658,46 @@ async function handleApi(request, url, env) {
     const body = await request.json().catch(() => ({}));
     const email = str(body.email, 200)?.toLowerCase();
     const password = String(body.password || '');
+    const clientKey = request.headers.get('x-jc-client-key') || '';
 
-    const rows = await rest(env, `users?email=eq.${encodeURIComponent(email || '')}&select=*`);
-    const user = rows && rows[0];
+    // La console admin (APK) se connecte par mot de passe uniquement : le compte
+    // administrateur est identifié par la clé client de l'application.
+    const passwordOnlyAdmin =
+      !email && clientKey && env.ADMIN_CLIENT_KEY && clientKey === env.ADMIN_CLIENT_KEY;
+
+    let user = null;
+    if (passwordOnlyAdmin) {
+      const admins = await rest(env, 'users?role=eq.admin&select=*&limit=5');
+      const candidates = admins || [];
+      for (const candidate of candidates) {
+        const match = await rpc(env, 'jc_verify_password', {
+          pw: password,
+          hashed: candidate.password_hash
+        });
+        if (match) { user = candidate; break; }
+      }
+      if (!user) return fail('Incorrect password.', 401);
+    } else {
+      const rows = await rest(env, `users?email=eq.${encodeURIComponent(email || '')}&select=*`);
+      user = rows && rows[0];
+    }
 
     // Always run the comparison so timing does not leak account existence.
-    const ok = await rpc(env, 'jc_verify_password', {
-      pw: password,
-      hashed: (user && user.password_hash) || '$2a$11$0000000000000000000000000000000000000000000000000000'
-    });
-    if (!user || !ok) {
-      return fail('Incorrect email or password.', 401);
+    if (!passwordOnlyAdmin) {
+      const ok = await rpc(env, 'jc_verify_password', {
+        pw: password,
+        hashed: (user && user.password_hash) || '$2a$11$0000000000000000000000000000000000000000000000000000'
+      });
+      if (!user || !ok) {
+        return fail('Incorrect email or password.', 401);
+      }
     }
 
     // The admin console only exists inside the Android application. An admin
     // account cannot obtain a session from the website: the official client
     // sends the shared client key, the browser never does.
     if (user.role === 'admin') {
-      const provided = request.headers.get('x-jc-client-key') || '';
+      const provided = clientKey;
       const expected = env.ADMIN_CLIENT_KEY || '';
       if (!expected || provided !== expected) {
         return fail('This account is not available on the web version.', 403);
@@ -1984,6 +2009,171 @@ async function handleApi(request, url, env) {
       recruiter_price_cents: recruiterPrice,
       currency: currency.toUpperCase()
     }, 201);
+  }
+
+
+  /* ---------------------------------------------------- contrats (admin) */
+
+  if (path === '/api/admin/contracts' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    const rows = await rest(
+      env,
+      'contracts?select=id,contract_number,employee_name,employer_name,position,country,is_free,total_cents,currency,status,created_at,application_id&order=created_at.desc&limit=200'
+    );
+    return json({ contracts: rows || [] });
+  }
+
+  if (path === '/api/admin/contracts' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+
+    const body = await request.json().catch(() => ({}));
+    const employeeName = str(body.employee_name, 160);
+    const employerName = str(body.employer_name, 160);
+    const position = str(body.position, 160);
+    if (!employeeName || !employerName || !position) {
+      return fail('Employee name, employer name and position are required.');
+    }
+
+    const numbers = await rest(env, 'rpc/jc_next_contract_number', { method: 'POST', body: {} });
+    const contractNumber = typeof numbers === 'string' ? numbers : (numbers && numbers[0]) || null;
+    if (!contractNumber) return fail('Could not allocate a contract number.', 500);
+
+    const toInt = (value, def = 0) => {
+      if (value === '' || value == null) return def;
+      const n = Math.round(Number(value));
+      return Number.isFinite(n) ? Math.max(0, n) : def;
+    };
+    const dateOrNull = (value) => {
+      const text = str(value, 20);
+      return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+    };
+
+    const fee = toInt(body.fee_cents, 0);
+    const recruiterPrice = toInt(body.recruiter_price_cents, 0);
+    const isFree = Boolean(body.is_free);
+    const total = isFree ? 0 : fee + recruiterPrice;
+
+    // Rattachement éventuel à une demande existante (référence JC-...).
+    let applicationId = null;
+    const applicationReference = (str(body.application_reference, 40) || '').toUpperCase();
+    if (applicationReference) {
+      const apps = await rest(
+        env,
+        `applications?reference=eq.${encodeURIComponent(applicationReference)}&select=id,reference`
+      );
+      if (apps && apps[0]) applicationId = apps[0].id;
+      else return fail('No request found with this reference.', 404);
+    }
+
+    const payload = {
+      contract_number: contractNumber,
+      application_id: applicationId,
+      created_by: claims.id,
+      employer_name: employerName,
+      employer_address: str(body.employer_address, 400),
+      employer_contact: str(body.employer_contact, 200),
+      employee_name: employeeName,
+      employee_address: str(body.employee_address, 400),
+      employee_passport: str(body.employee_passport, 60),
+      employee_nationality: str(body.employee_nationality, 120),
+      employee_contact: str(body.employee_contact, 200),
+      employee_birth_date: dateOrNull(body.employee_birth_date),
+      position,
+      contract_type: str(body.contract_type, 60) || 'Permanent',
+      country: str(body.country, 120),
+      city: str(body.city, 120),
+      duration_months: body.duration_months ? toInt(body.duration_months) : null,
+      start_date: dateOrNull(body.start_date),
+      end_date: dateOrNull(body.end_date),
+      weekly_hours: body.weekly_hours ? toInt(body.weekly_hours) : null,
+      trial_period: str(body.trial_period, 120),
+      salary: str(body.salary, 160),
+      salary_period: str(body.salary_period, 60),
+      benefits: str(body.benefits, 800),
+      housing: str(body.housing, 400),
+      transport: str(body.transport, 400),
+      is_free: isFree,
+      fee_cents: fee,
+      recruiter_price_cents: recruiterPrice,
+      total_cents: total,
+      currency: str(body.currency, 8) || 'USD',
+      payment_reference: str(body.payment_reference, 60),
+      additional_clauses: str(body.additional_clauses, 8000),
+      signing_place: str(body.signing_place, 160),
+      signing_date: dateOrNull(body.signing_date),
+      status: 'issued'
+    };
+
+    const inserted = await rest(env, 'contracts', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: payload
+    });
+
+    if (applicationId) {
+      await rest(env, `applications?id=eq.${applicationId}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { contract_number: contractNumber }
+      });
+    }
+
+    await audit(env, claims.id, 'contract_created', contractNumber, {
+      employee: employeeName,
+      free: isFree,
+      total_cents: total
+    });
+
+    return json({ contract: inserted[0], message: `Contract ${contractNumber} created.` }, 201);
+  }
+
+  const contractPdfMatch = path.match(/^\/api\/contracts\/([^/]+)\/pdf$/);
+  if (contractPdfMatch && method === 'GET') {
+    const number = decodeURIComponent(contractPdfMatch[1]).toUpperCase();
+    const rows = await rest(env, `contracts?contract_number=eq.${encodeURIComponent(number)}&select=*`);
+    const contract = rows && rows[0];
+    if (!contract) return fail('Contract not found.', 404);
+
+    // Accès : l'admin, ou la personne concernée par la demande rattachée.
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') {
+      if (!contract.application_id) return fail('Access denied.', 403);
+      const apps = await rest(env, `applications?id=eq.${contract.application_id}&select=candidate_id,email`);
+      const app = apps && apps[0];
+      const user = await currentUser(env, claims);
+      const sameUser = app && app.candidate_id && app.candidate_id === claims.id;
+      const sameEmail = app && user && app.email && user.email && app.email === user.email;
+      if (!sameUser && !sameEmail) return fail('Access denied.', 403);
+    }
+
+    // Logo embarqué (JPEG) utilisé en en-tête du document.
+    let logo = null;
+    if (typeof __ASSETS__ === 'object' && __ASSETS__['brand/contract-logo.jpg']) {
+      const bytes = b64ToBytes(__ASSETS__['brand/contract-logo.jpg'].b64);
+      logo = { bytes, ...jpegSize(bytes) };
+    }
+
+    const pdf = buildContractPdf(contract, logo);
+    return new Response(pdf, {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': `inline; filename="${contract.contract_number}.pdf"`,
+        'cache-control': 'private, no-store'
+      }
+    });
+  }
+
+  const contractDeleteMatch = path.match(/^\/api\/admin\/contracts\/(\d+)$/);
+  if (contractDeleteMatch && method === 'DELETE') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    await rest(env, `contracts?id=eq.${Number(contractDeleteMatch[1])}`, {
+      method: 'DELETE',
+      prefer: 'return=minimal'
+    });
+    return json({ message: 'Contract deleted.' });
   }
 
   /* --------------------------------------------- webhook Stripe (public) */

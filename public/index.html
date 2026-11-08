@@ -2,40 +2,374 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="JobConnect — international work contract requests and recruitment.">
-<title>JobConnect — Work without borders</title><link rel="icon" href="/brand/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="16x16" href="/brand/icon-16.png"><link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png"><link rel="icon" type="image/png" sizes="48x48" href="/brand/icon-48.png"><link rel="apple-touch-icon" sizes="180x180" href="/brand/icon-180.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b1b49"><meta name="apple-mobile-web-app-title" content="JobConnect"><meta property="og:image" content="/brand/logo-full.png"><meta property="og:title" content="JobConnect — Work without borders"><meta property="og:description" content="International work contracts. Find, apply, get hired globally."><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css"><script>(function(){try{var t=localStorage.getItem("jc_theme");if(!t)t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<meta name="description" content="JobConnect — international work contracts, internships and language stays. Candidates apply, track their request and receive a signed contract.">
+<title>JobConnect — Work without borders</title><link rel="icon" href="/brand/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="16x16" href="/brand/icon-16.png"><link rel="icon" type="image/png" sizes="32x32" href="/brand/icon-32.png"><link rel="icon" type="image/png" sizes="48x48" href="/brand/icon-48.png"><link rel="apple-touch-icon" sizes="180x180" href="/brand/icon-180.png"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#0b1b49"><meta name="apple-mobile-web-app-title" content="JobConnect"><meta property="og:image" content="/brand/logo-full.png"><meta property="og:title" content="JobConnect — Work without borders"><meta property="og:description" content="International work contracts, internships and language stays. Find, apply, get hired globally."><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/theme.css"><script>(function(){try{var t=localStorage.getItem("jc_theme");if(!t)t=window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 </head>
 <body>
 <div class="bg-aurora" aria-hidden="true"><span></span><span></span><span></span></div>
 <div class="bg-noise" aria-hidden="true"></div>
-<header class="top"><a class="logo" href="#"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="44" height="44"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a>
-<nav><a href="#offres">Jobs</a><a href="#demande">Request a contract</a><a href="#suivi">Track a request</a><a href="#plans">Premium plans</a></nav>
-<div class="top-actions"><button class="btn icon theme-toggle" id="themeToggle" title="Switch theme" aria-label="Switch theme">🌙</button><button class="btn light" data-open="login">Log in</button><button class="btn primary" data-open="register">Create account</button></div><button class="hamb" id="hamb">☰</button></header>
+
+<header class="top">
+  <a class="logo" href="#accueil"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="44" height="44"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a>
+  <div class="top-actions">
+    <button class="btn light" id="menuToggle" aria-expanded="false" aria-controls="categoryMenu">☰ Menu</button>
+    <button class="btn icon theme-toggle" id="themeToggle" title="Switch theme" aria-label="Switch theme">🌙</button>
+    <button class="btn light" data-status="1">Check status</button>
+    <button class="btn light" data-open="login">Log in</button>
+    <button class="btn primary" data-open="register">Create account</button>
+  </div>
+</header>
+
+<!-- ------------------------------------------------ menu repliable, par catégorie -->
+<div class="catmenu" id="categoryMenu" hidden>
+  <div class="catmenu-inner">
+    <section class="catmenu-col">
+      <h4>Discover</h4>
+      <a href="#accueil">Home &amp; presentation</a>
+      <a href="#comment">How it works</a>
+      <a href="#contrats">Contract types</a>
+      <a href="#categories">Openings by category</a>
+    </section>
+    <section class="catmenu-col">
+      <h4>Apply</h4>
+      <a href="#demande">Submit a request</a>
+      <a href="#suivi" data-status="1">Track a request</a>
+      <a href="#offres">Jobs board</a>
+      <a href="#stages">Internships &amp; language stays</a>
+    </section>
+    <section class="catmenu-col">
+      <h4>Prices</h4>
+      <a href="#plans">Free and paid contracts</a>
+      <a href="#plans-recruiter">Recruiter plans</a>
+      <a href="#paiement">Card payment</a>
+    </section>
+    <section class="catmenu-col">
+      <h4>Rules</h4>
+      <a href="#reglement">Terms &amp; conditions</a>
+      <a href="#reglement-confidentialite">Privacy</a>
+      <a href="#reglement-remboursement">Refunds</a>
+      <a href="#reglement-conduite">Code of conduct</a>
+    </section>
+  </div>
+</div>
+
 <main>
-<section class="hero"><div class="hero-copy"><span class="eyebrow">🌍 A career without borders</span><h1>Your next work contract <em>starts here.</em></h1><p>Discover international opportunities, submit your request and track every step with your personal reference code.</p><div class="hero-actions"><a class="btn primary" href="#demande">Submit a request ↗</a><a class="btn light" href="#offres">Browse jobs</a></div><div class="trust">✓ Trackable requests　 ✓ Resume applications　 ✓ International recruitment</div></div><div class="hero-visual"><div class="globe">🌐</div><div class="float-card f1">✈️ International opportunities</div><div class="float-card f2">✓ Your request is trackable</div><div class="orbit"></div></div></section>
-<section class="stats"><div><b>01</b><span>Submit your request</span></div><div><b>02</b><span>Get your reference</span></div><div><b>03</b><span>Track its progress</span></div></section>
-<section class="section" id="demande"><div class="section-head"><span class="eyebrow">Candidates worldwide</span><h2>Work contract request</h2><p>Complete this form. Your reference code will appear after submission.</p></div>
-<form id="requestForm" class="panel form-grid" enctype="multipart/form-data">
-<label>Full name *<input name="full_name" required placeholder="Your full name"></label><label>Email address *<input name="email" type="email" required placeholder="vous@exemple.com"></label>
-<label>Phone number with country code<input name="phone" placeholder="+33 6 00 00 00 00"></label><label>Nationality<select name="nationality"><option value="">Select your nationality</option></select></label>
-<label>Country of residence<select name="residence_country"><option value="">Select your country</option></select></label><label>Preferred work country *<select name="target_country" required><option value="">Select a destination</option></select></label>
-<label>Category *<select name="category" id="professionCategory" required><option value="">Select a category</option></select></label><label>Profession / desired role *<input name="profession" required list="professionsList" placeholder="e.g. Nurse, electrician..."></label><label>Contract type *<select name="contract_type" required><option value="">Select</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Seasonal</option><option>Internship</option><option>Apprenticeship</option><option>Freelance</option></select></label>
-<label>Professional experience<select name="experience"><option value="">Select</option><option>Entry level</option><option>Less than 2 years</option><option>2–5 years</option><option>5–10 years</option><option>More than 10 years</option></select></label>
-<label class="wide">Tell us about your goals / skills<textarea name="message" rows="4" placeholder="Briefly describe your experience and expectations..."></textarea></label>
-<label class="wide">Resume (PDF, DOC or DOCX — 5 MB maximum)<input type="file" name="cv" accept=".pdf,.doc,.docx"></label>
-<label class="check wide"><input type="checkbox" required> I agree that my information may be used to process my request. *</label>
-<div class="wide"><button class="btn primary" type="submit">Submit my request →</button><span class="form-note" id="requestMessage"></span></div>
-<div class="wide result hidden" id="referenceResult" aria-live="polite"></div></form></section>
-<section class="section soft" id="suivi"><div class="section-head"><span class="eyebrow">Transparent tracking</span><h2>What is the status of your request?</h2><p>Enter the reference code you received after submitting your form.</p></div><form id="trackForm" class="track panel"><input name="reference" required placeholder="Ex. JC-2026-A1B2C3D4"><button class="btn primary">Track my request</button></form><div id="trackResult" class="track-result hidden"></div></section>
-<section class="section" id="offres"><div class="section-head"><span class="eyebrow">International recruitment</span><h2>International job openings</h2><p>Browse jobs posted by recruiters and apply with your resume.</p></div><div class="job-search panel"><input id="jobTerm" placeholder="Role, company..."><input id="jobCountry" list="countriesList" placeholder="Country"><select id="jobCategory"></select><select id="jobType"><option value="">All contract types</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Internship</option><option>Freelance</option></select><button class="btn primary" id="jobSearch">Search</button></div><div id="jobs" class="jobs"><p class="muted">Loading jobs...</p></div></section>
-<section class="section soft"><div class="section-head"><span class="eyebrow">For employers</span><h2>Hire the talent you need</h2><p>Create an employer account, publish opportunities and receive applications.</p><button class="btn primary" data-open="register">Become an employer →</button></div></section>
-<section class="section" id="plans"><div class="section-head"><span class="eyebrow">Pricing</span><h2>Free for candidates, subscription for recruiters</h2><p>Candidates never pay a subscription. Recruiters must hold an active plan to publish contracts.</p></div>
-<div class="plans three">
-<article class="plan"><span class="eyebrow">Candidates</span><h3>Candidate</h3><div class="price">Free</div><ul><li>Free account and CV upload</li><li>Unlimited contract requests</li><li>Reference code and live tracking</li><li>Target response 5–20 minutes</li></ul><button class="btn light" data-open="register">Create free account</button></article>
-<article class="plan featured"><span class="eyebrow">Recruiters</span><h3>Recruiter Pro</h3><div class="price">$95.00 <small>/ month</small></div><ul><li>Publish unlimited contracts</li><li>Set your own price per contract</li><li>Candidate database access</li><li>Priority moderation</li></ul><button class="btn primary choose-plan" data-plan="recruiter_pro">Subscribe to Recruiter Pro</button></article>
-<article class="plan"><span class="eyebrow">Promotional rate</span><h3>Recruiter Promo</h3><div class="price">$49.00 <small>/ month</small></div><ul><li>Limited-time promotional rate</li><li>Up to 5 contracts per month</li><li>Standard moderation</li><li>Receipts and invoices</li></ul><button class="btn light choose-plan" data-plan="recruiter_promo">Choose the promo plan</button></article>
-</div><p class="pricing-note"><b>Candidate payment:</b> when you apply, you pay the JobConnect service fee plus the recruiter's price. Cards are handled by Stripe (Visa / Mastercard) and a receipt is e-mailed after confirmation. JobConnect never stores card data and does not open a payment session until Stripe is configured on the deployment.</p></section>
+<!-- ------------------------------------------------------------------ accueil -->
+<section class="hero" id="accueil">
+  <div class="hero-copy">
+    <span class="eyebrow">🌍 A career without borders · since 2023</span>
+    <h1>Your next work contract <em>starts here.</em></h1>
+    <p>JobConnect is an international recruitment platform. We publish work contracts, internships and
+      language stays abroad, verify the employers, prepare the contract and let every candidate follow
+      the progress of the file with a personal reference code.</p>
+    <div class="hero-actions">
+      <a class="btn primary" href="#demande">Submit a request ↗</a>
+      <button class="btn light" data-status="1">Check my status</button>
+      <a class="btn light" href="#reglement">Read the rules</a>
+    </div>
+    <div class="trust">✓ Employer verification　 ✓ Traceable request　 ✓ Contract and receipt by e-mail</div>
+  </div>
+  <div class="hero-visual">
+    <img src="/brand/logo-full.png" alt="JobConnect" class="hero-logo">
+    <div class="float-card f1">✈️ International contracts</div>
+    <div class="float-card f2">✓ Status tracked in real time</div>
+  </div>
+</section>
+
+<section class="stats">
+  <div><b>01</b><span>Choose a category</span></div>
+  <div><b>02</b><span>Submit your request</span></div>
+  <div><b>03</b><span>Get your reference</span></div>
+  <div><b>04</b><span>Sign the contract</span></div>
+</section>
+
+<!-- ------------------------------------------------------------- présentation -->
+<section class="section" id="comment">
+  <div class="section-head">
+    <span class="eyebrow">The platform</span>
+    <h2>What JobConnect does</h2>
+    <p>One place for candidates and recruiters. Everything is traceable from the first click to the
+      signed contract.</p>
+  </div>
+  <div class="feature-grid">
+    <article class="feature"><b>1</b><h3>Verified employers</h3><p>Every company publishing on JobConnect is checked before its contracts are made visible.</p></article>
+    <article class="feature"><b>2</b><h3>Contract prepared for you</h3><p>The employer, the salary, the working time and the clauses are written into a contract generated by the platform.</p></article>
+    <article class="feature"><b>3</b><h3>Tracking code</h3><p>You receive a reference such as <b>JC-2026-A1B2C3</b> and can check the status at any moment.</p></article>
+    <article class="feature"><b>4</b><h3>Answer within 5–20 minutes</h3><p>Each request has a target response time. Pending, Accepted or Rejected — always with a reason.</p></article>
+    <article class="feature"><b>5</b><h3>Receipt by e-mail</h3><p>After a card payment, the receipt and the documents arrive by e-mail within a few minutes.</p></article>
+    <article class="feature"><b>6</b><h3>Support team</h3><p>A dedicated team handles requests, messages, contracts and payments every working day.</p></article>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------ types de contrat -->
+<section class="section soft" id="contrats">
+  <div class="section-head">
+    <span class="eyebrow">Contracts</span>
+    <h2>Some contracts are free, some are paid</h2>
+    <p>A placement is not always charged to the candidate. Each published contract states its own
+      conditions before you apply — the price is always displayed, never hidden.</p>
+  </div>
+  <div class="toggle-list" id="contractToggles">
+    <details class="toggle" open>
+      <summary><span class="dot free"></span><b>Free contracts</b><em>0.00 — paid by the employer</em></summary>
+      <p>The employer covers all recruitment costs. The candidate pays nothing: no application fee, no
+        placement fee, no processing fee. The contract shows « No fee for the employee » and the amount
+        due is 0.00. Free contracts are common for seasonal work, high-demand professions and internships
+        arranged directly with the company.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot paid"></span><b>Paid contracts</b><em>JobConnect fee + recruiter price</em></summary>
+      <p>For these contracts the candidate pays a single, non-recurring amount: the JobConnect service fee
+        plus the price set by the recruiter. The exact total is shown before any payment, and the contract
+        repeats it in section 4. Payment is made by Visa or Mastercard; a receipt is issued immediately.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot"></span><b>Permanent employment</b><em>Open-ended</em></summary>
+      <p>An open-ended contract with the employer, subject to the trial period stated in the contract.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot"></span><b>Fixed-term and temporary</b><em>1 to 36 months</em></summary>
+      <p>Contracts for a defined mission or season, renewable according to the labour code of the country.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot"></span><b>Internships (stages)</b><em>2 to 12 months</em></summary>
+      <p>A training placement inside a company, with a supervisor, an educational objective and, where the
+        law requires it, a grant. Internships may be free or paid depending on the host company.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot"></span><b>Language stays (séjours linguistiques)</b><em>2 weeks to 12 months</em></summary>
+      <p>A language course abroad combined with accommodation, and optionally a work placement. The
+        contract states the school, the number of hours per week, the accommodation and the total price.</p>
+    </details>
+    <details class="toggle">
+      <summary><span class="dot"></span><b>Apprenticeship and freelance</b><em>Variable</em></summary>
+      <p>Work-study programmes with alternating training, and independent contracts for consultants.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------- offres par catégorie -->
+<section class="section" id="categories">
+  <div class="section-head">
+    <span class="eyebrow">Everything by category</span>
+    <h2>Choose your sector</h2>
+    <p>Open a category to see the professions it covers, then use it in the request form.</p>
+  </div>
+  <div class="cat-grid" id="categoryList"><p class="muted">Loading categories…</p></div>
+</section>
+
+<!-- ---------------------------------------------------------------- demande -->
+<section class="section soft" id="demande">
+  <div class="section-head">
+    <span class="eyebrow">Candidates worldwide</span>
+    <h2>Work contract request</h2>
+    <p>Complete this form. Your reference code appears immediately after submission.</p>
+  </div>
+  <form id="requestForm" class="panel form-grid" enctype="multipart/form-data">
+    <label>Full name *<input name="full_name" required placeholder="Your full name"></label>
+    <label>Email address *<input name="email" type="email" required placeholder="you@example.com"></label>
+    <label>Phone number with country code<input name="phone" placeholder="+33 6 00 00 00 00"></label>
+    <label>Nationality<select name="nationality"><option value="">Select your nationality</option></select></label>
+    <label>Country of residence<select name="residence_country"><option value="">Select your country</option></select></label>
+    <label>Preferred work country *<select name="target_country" required><option value="">Select a destination</option></select></label>
+    <label>Category *<select name="category" id="professionCategory" required><option value="">Select a category</option></select></label>
+    <label>Profession / desired role *<input name="profession" required list="professionsList" placeholder="e.g. Nurse, electrician..."></label>
+    <label>Contract type *<select name="contract_type" required><option value="">Select</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Seasonal</option><option>Internship</option><option>Language stay</option><option>Apprenticeship</option><option>Freelance</option></select></label>
+    <label>Professional experience<select name="experience"><option value="">Select</option><option>Entry level</option><option>Less than 2 years</option><option>2–5 years</option><option>5–10 years</option><option>More than 10 years</option></select></label>
+    <label class="wide">Tell us about your goals / skills<textarea name="message" rows="4" placeholder="Briefly describe your experience and expectations..."></textarea></label>
+    <label class="wide">Resume (PDF, DOC or DOCX — 5 MB maximum)<input type="file" name="cv" accept=".pdf,.doc,.docx"></label>
+    <label class="check wide"><input type="checkbox" name="accept_terms" required> I have read and accept the <a href="#reglement">terms &amp; conditions</a> and the privacy policy. *</label>
+    <div class="wide"><button class="btn primary" type="submit">Submit my request →</button><span class="form-note" id="requestMessage"></span></div>
+    <div class="wide result hidden" id="referenceResult" aria-live="polite"></div>
+  </form>
+</section>
+
+<!-- -------------------------------------------------------- stages & séjours -->
+<section class="section" id="stages">
+  <div class="section-head">
+    <span class="eyebrow">Also available</span>
+    <h2>Internships and language stays</h2>
+    <p>Two programmes for students and young graduates who want experience abroad.</p>
+  </div>
+  <div class="plans two">
+    <article class="plan">
+      <span class="eyebrow">Internship</span>
+      <h3>Stage in a company</h3>
+      <div class="price">2–12 <small>months</small></div>
+      <ul><li>Placement in your field of study</li><li>Supervisor and training plan</li><li>Internship agreement prepared by JobConnect</li><li>Free or paid depending on the company</li></ul>
+      <a class="btn light" href="#demande">Request an internship</a>
+    </article>
+    <article class="plan featured">
+      <span class="eyebrow">Language stay</span>
+      <h3>Study &amp; live abroad</h3>
+      <div class="price">2 <small>weeks and more</small></div>
+      <ul><li>Language school with certified teachers</li><li>Accommodation and transport included in the offer</li><li>Optional work placement</li><li>Free or paid depending on the programme</li></ul>
+      <a class="btn primary" href="#demande">Request a language stay</a>
+    </article>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------- offres recruteurs -->
+<section class="section soft" id="offres">
+  <div class="section-head">
+    <span class="eyebrow">International recruitment</span>
+    <h2>Open positions published by recruiters</h2>
+    <p>Each card shows the contract type and its price — free when the employer covers everything.</p>
+  </div>
+  <div class="job-search panel">
+    <input id="jobTerm" placeholder="Role, company...">
+    <input id="jobCountry" list="countriesList" placeholder="Country">
+    <select id="jobCategory"></select>
+    <select id="jobType"><option value="">All contract types</option><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Seasonal</option><option>Internship</option><option>Language stay</option><option>Freelance</option></select>
+    <button class="btn primary" id="jobSearch">Search</button>
+  </div>
+  <div id="jobs" class="jobs"><p class="muted">Loading jobs...</p></div>
+</section>
+
+<!-- ------------------------------------------------------------------ prix -->
+<section class="section" id="plans">
+  <div class="section-head">
+    <span class="eyebrow">Prices</span>
+    <h2>Free for candidates, subscription for recruiters</h2>
+    <p>Creating an account and submitting a request is always free. When a contract is paid, the
+      candidate pays everything once, inside the contract.</p>
+  </div>
+  <div class="plans two">
+    <article class="plan">
+      <span class="eyebrow">Candidates</span>
+      <h3>Candidate</h3>
+      <div class="price">Free</div>
+      <ul><li>Free account and resume upload</li><li>Unlimited requests</li><li>Reference code and live tracking</li><li>Some contracts are entirely free</li><li>When a contract is paid, the fee is stated before you apply</li></ul>
+      <button class="btn light" data-open="register">Create free account</button>
+    </article>
+    <article class="plan featured" id="plans-recruiter">
+      <span class="eyebrow">Recruiters</span>
+      <h3>Recruiter plans</h3>
+      <div class="price">$95.00 <small>/ month</small></div>
+      <ul><li>Publish unlimited contracts, internships and language stays</li><li>Set your own price per contract (or publish it free)</li><li>Receive applications and reply within 5–20 minutes</li><li><b>Recruiter Promo</b> — promotional plan at $49.00 / month (5 contracts per month)</li></ul>
+      <button class="btn primary choose-plan" data-plan="recruiter_pro">Subscribe to Recruiter Pro</button>
+      <button class="btn light choose-plan" data-plan="recruiter_promo" style="margin-top:8px">Choose the promo plan</button>
+    </article>
+  </div>
+  <p class="pricing-note" id="paiement"><b>Payment:</b> cards are processed by Stripe (Visa / Mastercard).
+    A receipt is e-mailed within a few minutes after confirmation. JobConnect never stores card data.</p>
+</section>
+
+<!-- ---------------------------------------------------------- suivi (fenêtre) -->
+<section class="section soft" id="suivi">
+  <div class="section-head">
+    <span class="eyebrow">Transparent tracking</span>
+    <h2>What is the status of your request?</h2>
+    <p>Enter the reference code you received after submitting your form.</p>
+  </div>
+  <form id="trackForm" class="track panel"><input name="reference" required placeholder="Ex. JC-2026-A1B2C3D4"><button class="btn primary">Track my request</button></form>
+  <div id="trackResult" class="track-result hidden"></div>
+</section>
+
+<!-- --------------------------------------------------------- règles & conditions -->
+<section class="section" id="reglement">
+  <div class="section-head">
+    <span class="eyebrow">Legal</span>
+    <h2>Terms, rules and conditions</h2>
+    <p>These rules apply to every visitor, candidate and recruiter. They are written in plain English so
+      that everyone can understand them before using the platform.</p>
+  </div>
+
+  <div class="toggle-list legal">
+    <details class="toggle" open>
+      <summary><b>1. Purpose and acceptance</b></summary>
+      <p>JobConnect is an online platform that connects candidates looking for work abroad with employers
+        and recruiters. By creating an account, submitting a request or paying a fee, you accept these
+        terms in full. If you do not accept them, you must not use the service.</p>
+      <p>JobConnect is not the employer. The employment relationship is created directly between the
+        candidate and the employer named in the contract.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>2. Accounts</b></summary>
+      <p>You must give accurate information: real name, valid e-mail address, valid telephone number and
+        genuine documents. One person, one account. You are responsible for keeping your password secret.
+        Accounts used to publish false offers, to collect money without a contract, or to harass other
+        users are suspended immediately and without compensation.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>3. Requests and response times</b></summary>
+      <p>Every request receives a reference code. The platform's target is to answer within 5 to 20
+        minutes during opening hours; outside those hours the answer comes at the start of the next
+        session. A request is answered with one of three statuses: <b>Pending</b>, <b>Accepted</b> or
+        <b>Rejected</b>. Every rejection states a reason, and that reason is visible with the reference
+        code.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>4. Free contracts and paid contracts</b></summary>
+      <p>Some contracts are free: the employer pays all recruitment costs and the candidate owes nothing.
+        Other contracts are paid: the candidate pays the JobConnect service fee plus the price set by the
+        recruiter. The total amount is displayed before any payment and repeated in the contract. No
+        candidate is ever asked to pay an amount that is not written in the contract.</p>
+      <p>Prices are shown in the currency of the contract. The JobConnect fee is a one-off service fee; it
+        is not a salary advance, a deposit for a visa or a guarantee of employment.</p>
+    </details>
+    <details class="toggle" id="reglement-remboursement">
+      <summary><b>5. Payment, receipts and refunds</b></summary>
+      <p>Payments are handled by a card payment provider (Visa, Mastercard). JobConnect never receives or
+        stores card numbers or security codes. A receipt is sent by e-mail within a few minutes after
+        confirmation.</p>
+      <ul>
+        <li><b>Before the contract is issued:</b> if your request is rejected, the amount that is not
+          attributable to work already performed is refunded to the same card within 14 days.</li>
+        <li><b>Duplicated payment:</b> fully refunded.</li>
+        <li><b>After the contract is signed by both parties:</b> the service has been delivered and the
+          fee is no longer refundable, except where the law provides otherwise.</li>
+        <li><b>Fraudulent or unauthorised payment:</b> the account is frozen and the case reported.</li>
+      </ul>
+    </details>
+    <details class="toggle" id="reglement-conduite">
+      <summary><b>6. Code of conduct</b></summary>
+      <p>Messages exchanged on the platform must remain professional. The following are strictly forbidden:
+        asking a candidate for money outside the platform, promising a visa in exchange for payment,
+        sending discriminatory or sexual content, impersonating an employer, and publishing an offer that
+        does not correspond to a real position.</p>
+      <p>Messages can be deleted by the JobConnect team only, and a deletion applies to both parties. Any
+        serious breach is reported to the competent authorities.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>7. Responsibilities</b></summary>
+      <p>JobConnect verifies the identity of employers and the conformity of contracts, but cannot
+        guarantee that a visa will be granted or that an employer will respect the contract. The candidate
+        is responsible for the accuracy of the documents provided. The employer is responsible for the
+        salary, the working conditions and the legal formalities in the country of employment.</p>
+    </details>
+    <details class="toggle" id="reglement-confidentialite">
+      <summary><b>8. Personal data and privacy</b></summary>
+      <p>We collect the information needed to process a request: name, contact details, nationality,
+        resume and the details of the contract. This information is used only to provide the service, is
+        stored on secured servers, and is never sold. It is kept as long as the account exists and, for
+        accounting documents, for the period required by law. You may ask for access, correction or
+        deletion of your data by writing to the contact address below.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>9. Applicable law and disputes</b></summary>
+      <p>These terms are governed by the law of the country where JobConnect is established. In the event
+        of a dispute, the parties first seek an amicable solution. Failing agreement within thirty (30)
+        days, the competent courts are seized. The employment contract itself is governed by the law of
+        the country of employment.</p>
+    </details>
+    <details class="toggle">
+      <summary><b>10. Changes to these terms</b></summary>
+      <p>These terms may be updated. The version published on this page is the one in force. Continuing to
+        use the platform after a change means accepting the new version.</p>
+    </details>
+  </div>
+</section>
 </main>
-<footer><a class="logo" href="#"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="40" height="40"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a><span>© 2026 JobConnect · International platform</span><span>Contact : contact@jobconnect.example</span></footer>
+
+<footer>
+  <a class="logo" href="#accueil"><img class="logo-img" src="/brand/logo-mark.png" alt="JobConnect" width="40" height="40"><span>JobConnect<small>Find · Apply · Get Hired Globally</small></span></a>
+  <span>© 2023–2026 JobConnect · International platform</span>
+  <span>Contact : contact@jobconnect.example</span>
+</footer>
+
 <div class="modal hidden" id="modal"><div class="modal-card"><button class="close" id="closeModal">×</button><div id="modalContent"></div></div></div>
-<datalist id="countriesList"></datalist><datalist id="nationalitiesList"></datalist><datalist id="professionsList"></datalist><div id="toast" class="toast hidden"></div><script src="/catalog.js"></script><script src="/payment.js"></script><script src="/app.js"></script><script src="/chat.js"></script></body></html>
+<datalist id="countriesList"></datalist><datalist id="nationalitiesList"></datalist><datalist id="professionsList"></datalist>
+<div id="toast" class="toast hidden"></div>
+<script src="/catalog.js"></script><script src="/payment.js"></script><script src="/app.js"></script><script src="/chat.js"></script>
+</body></html>

@@ -89,7 +89,7 @@ check('checkout abonnement sans Stripe -> 503 explicite', r.status === 503 && /n
 r = await call('/api/subscriptions', { method: 'POST', token: recT, body: { plan: 'recruiter_pro' } });
 check('ancien endpoint renvoie vers Stripe (402)', r.status === 402, `${r.status}`);
 
-r = await call('/api/subscriptions', { method: 'POST', token: candT, body: { plan: 'candidate_premium' } });
+r = await call('/api/subscriptions', { method: 'POST', token: candT, body: { plan: 'candidate_free' } });
 check('candidat : aucun abonnement requis', r.status === 200 && r.data.status === 'free', `${r.status} ${JSON.stringify(r.data).slice(0, 100)}`);
 
 console.log('\n=== 3. GRILLE TARIFAIRE ===');
@@ -97,7 +97,8 @@ r = await call('/api/plans');
 const plans = r.data.plans || {};
 check('Recruiter Pro à 95 USD/mois', plans.recruiter_pro && plans.recruiter_pro.amount_cents === 9500, JSON.stringify(plans.recruiter_pro || {}).slice(0, 100));
 check('formule promotionnelle présente', !!plans.recruiter_promo && plans.recruiter_promo.promotional === true);
-check('candidat gratuit', plans.candidate_premium && plans.candidate_premium.amount_cents === 0);
+check('candidat gratuit', plans.candidate_free && plans.candidate_free.amount_cents === 0);
+check('aucun abonnement candidat payant', !plans.candidate_premium);
 
 r = await call('/api/admin/settings', { token: adminT });
 check('réglages accessibles à l’admin', r.status === 200 && r.data.settings.jobconnect_fee_cents >= 0, r.status);
@@ -236,7 +237,9 @@ check('réglages interdits au candidat', r.status === 403, r.status);
 r = await call('/api/admin/overview');
 check('dashboard exige une session', r.status === 401, r.status);
 r = await call('/api/auth/login', { method: 'POST', body: { email: 'admin@jobconnect.example', password: ADMIN_PASSWORD } });
-check('admin bloqué sur le web', r.status === 403, r.status);
+check('admin sans clé client refusé', r.status === 403 || r.status === 401, r.status);
+r = await call('/api/auth/login', { method: 'POST', headers: { 'x-jc-client-key': ADMIN_CLIENT_KEY }, body: { password: ADMIN_PASSWORD } });
+check('admin: connexion par mot de passe seul', r.status === 200 && r.data.token, r.status);
 r = await call(`/api/applications/track/${appRef}`);
 check('suivi public sans authentification', r.status === 200, r.status);
 
@@ -244,6 +247,10 @@ console.log('\n=== 12. INTERFACE ===');
 const home = await (await fetch(BASE + '/')).text();
 check('offre Recruiter Pro 95 USD affichée', home.includes('$95.00'));
 check('formule promo affichée', home.includes('Recruiter Promo'));
+check('contrats gratuits et payants expliqués', /free/i.test(home) && /paid/i.test(home));
+check('stages et séjours linguistiques', home.includes('Internships and language stays'));
+check('conditions générales', home.includes('Terms, rules and conditions'));
+check('mention depuis 2023', home.includes('2023'));
 check('candidat gratuit affiché', /Free/.test(home));
 check('script de paiement chargé', home.includes('payment.js'));
 check('aucune référence admin sur le site', !/admin/i.test(home));
