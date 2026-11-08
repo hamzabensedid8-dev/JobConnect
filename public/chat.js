@@ -128,6 +128,12 @@
         ? { name: "JobConnect Support", sub: "Official team" }
         : { name: conv.candidate ? conv.candidate.name : "Candidate", sub: "Candidate" };
     }
+    if (conv.kind === "admin_recruiter") {
+      return currentUser.role === "recruiter"
+        ? { name: "JobConnect Support", sub: "Official team" }
+        : { name: conv.recruiter ? conv.recruiter.name : "Recruiter",
+            sub: conv.recruiter && conv.recruiter.company ? conv.recruiter.company : "Recruiter" };
+    }
     if (currentUser.role === "recruiter") {
       return { name: conv.candidate ? conv.candidate.name : "Candidate", sub: "Candidate" };
     }
@@ -245,7 +251,7 @@
     var foot = document.getElementById("jcNewChats");
     if (foot) {
       foot.innerHTML =
-        currentUser.role === "candidate"
+        currentUser.role === "candidate" || currentUser.role === "recruiter"
           ? '<button class="btn light jc-new" id="jcNewAdmin">Message JobConnect</button>'
           : "";
       var btn = document.getElementById("jcNewAdmin");

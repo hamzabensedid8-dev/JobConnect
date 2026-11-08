@@ -336,9 +336,10 @@ async function loadConvs(){
     var d = await api("/api/chat/conversations");
     state.convs = d.conversations || [];
     document.getElementById("convList").innerHTML = state.convs.map(function(c){
-      var name = c.kind === "admin_candidate"
-        ? (c.candidate ? c.candidate.name + " · support" : "Support")
-        : (c.candidate ? c.candidate.name : "?") + " ↔ " + (c.recruiter ? c.recruiter.name : "?");
+      var name;
+      if (c.kind === "admin_candidate") name = (c.candidate ? c.candidate.name + " · candidate" : "Candidate");
+      else if (c.kind === "admin_recruiter") name = (c.recruiter ? c.recruiter.name + " · recruiter" : "Recruiter");
+      else name = (c.candidate ? c.candidate.name : "?") + " ↔ " + (c.recruiter ? c.recruiter.name : "?");
       var last = c.last_message ? c.last_message.body : "No message yet";
       return '<div class="conv" data-id="'+c.id+'">'+
         '<div class="avatar">'+esc(initials(name))+'</div>'+
@@ -358,7 +359,7 @@ async function openConv(id){
   state.active = id; state.msgs = []; state.lastId = 0;
   document.getElementById("chatView").classList.add("on");
   document.getElementById("chatPeer").textContent = conv
-    ? (conv.candidate ? conv.candidate.name : "?" ) + (conv.recruiter ? " ↔ " + conv.recruiter.name : " · support")
+    ? (conv.candidate ? conv.candidate.name : (conv.recruiter ? conv.recruiter.name : "?"))
     : "Chat";
   document.getElementById("chatSub").textContent = conv ? conv.kind.replace("_"," ") : "";
   await pollMsgs(true);

@@ -21,6 +21,68 @@ const JWT_TTL_SECONDS = 12 * 60 * 60;
 const APPLICATION_STATUSES = ['received', 'under_review', 'shortlisted', 'approved', 'rejected', 'completed'];
 const JOB_STATUSES = ['pending', 'published', 'rejected', 'closed'];
 
+const CONTRACT_TYPES = ['Permanent', 'Fixed-term', 'Temporary', 'Seasonal', 'Internship', 'Apprenticeship', 'Freelance'];
+
+const EXPERIENCE_LEVELS = ['Entry level', 'Less than 2 years', '2–5 years', '5–10 years', 'More than 10 years'];
+
+const JOB_CATEGORIES = [
+  'Healthcare & Nursing', 'Information Technology', 'Engineering', 'Construction & Trades',
+  'Skilled Trades & Manufacturing', 'Logistics & Transport', 'Hospitality & Tourism',
+  'Food & Catering', 'Agriculture & Farming', 'Education & Training', 'Finance & Accounting',
+  'Sales & Retail', 'Marketing & Communication', 'Customer Support', 'Administration & Office',
+  'Legal', 'Human Resources', 'Social Work & Care', 'Pharmacy & Laboratory', 'Automotive',
+  'Aviation', 'Maritime & Offshore', 'Energy & Utilities', 'Mining & Resources',
+  'Oil & Gas', 'Textile & Garment', 'Beauty & Wellness', 'Sports & Fitness',
+  'Security & Safety', 'Cleaning & Facility', 'Domestic & Household Work',
+  'Childcare & Nanny', 'Elderly Care', 'Dentistry', 'Veterinary', 'Media & Creative',
+  'Design & Architecture', 'Real Estate', 'Public Sector', 'Research & Science',
+  'Telecommunications', 'Warehouse & Storage', 'Driving & Delivery'
+];
+
+const COUNTRIES = [
+  'Afghanistan','Albania','Algeria','Andorra','Angola','Antigua and Barbuda','Argentina','Armenia','Australia','Austria',
+  'Azerbaijan','Bahamas','Bahrain','Bangladesh','Barbados','Belarus','Belgium','Belize','Benin','Bhutan',
+  'Bolivia','Bosnia and Herzegovina','Botswana','Brazil','Brunei','Bulgaria','Burkina Faso','Burundi','Cambodia','Cameroon',
+  'Canada','Cape Verde','Central African Republic','Chad','Chile','China','Colombia','Comoros','Congo','Costa Rica',
+  'Croatia','Cuba','Cyprus','Czechia','Denmark','Djibouti','Dominica','Dominican Republic','DR Congo','Ecuador',
+  'Egypt','El Salvador','Equatorial Guinea','Eritrea','Estonia','Eswatini','Ethiopia','Fiji','Finland','France',
+  'Gabon','Gambia','Georgia','Germany','Ghana','Greece','Grenada','Guatemala','Guinea','Guinea-Bissau',
+  'Guyana','Haiti','Honduras','Hong Kong','Hungary','Iceland','India','Indonesia','Iran','Iraq',
+  'Ireland','Israel','Italy','Ivory Coast','Jamaica','Japan','Jordan','Kazakhstan','Kenya','Kiribati',
+  'Kosovo','Kuwait','Kyrgyzstan','Laos','Latvia','Lebanon','Lesotho','Liberia','Libya','Liechtenstein',
+  'Lithuania','Luxembourg','Madagascar','Malawi','Malaysia','Maldives','Mali','Malta','Marshall Islands','Mauritania',
+  'Mauritius','Mexico','Micronesia','Moldova','Monaco','Mongolia','Montenegro','Morocco','Mozambique','Myanmar',
+  'Namibia','Nauru','Nepal','Netherlands','New Zealand','Nicaragua','Niger','Nigeria','North Macedonia','Norway',
+  'Oman','Pakistan','Palau','Palestine','Panama','Papua New Guinea','Paraguay','Peru','Philippines','Poland',
+  'Portugal','Qatar','Romania','Russia','Rwanda','Saint Kitts and Nevis','Saint Lucia','Saint Vincent and the Grenadines','Samoa','San Marino',
+  'Sao Tome and Principe','Saudi Arabia','Senegal','Serbia','Seychelles','Sierra Leone','Singapore','Slovakia','Slovenia','Solomon Islands',
+  'Somalia','South Africa','South Korea','South Sudan','Spain','Sri Lanka','Sudan','Suriname','Sweden','Switzerland',
+  'Syria','Taiwan','Tajikistan','Tanzania','Thailand','Timor-Leste','Togo','Tonga','Trinidad and Tobago','Tunisia',
+  'Turkey','Turkmenistan','Tuvalu','Uganda','Ukraine','United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan',
+  'Vanuatu','Vatican City','Venezuela','Vietnam','Yemen','Zambia','Zimbabwe'
+];
+
+const NATIONALITIES = [
+  'Afghan','Albanian','Algerian','Andorran','Angolan','Antiguan','Argentine','Armenian','Australian','Austrian',
+  'Azerbaijani','Bahamian','Bahraini','Bangladeshi','Barbadian','Belarusian','Belgian','Belizean','Beninese','Bhutanese',
+  'Bolivian','Bosnian','Botswanan','Brazilian','Bruneian','Bulgarian','Burkinabe','Burundian','Cambodian','Cameroonian',
+  'Canadian','Cape Verdean','Central African','Chadian','Chilean','Chinese','Colombian','Comorian','Congolese','Costa Rican',
+  'Croatian','Cuban','Cypriot','Czech','Danish','Djiboutian','Dominican','Dutch','Ecuadorian','Egyptian',
+  'Emirati','English','Equatorial Guinean','Eritrean','Estonian','Eswatini','Ethiopian','Fijian','Filipino','Finnish',
+  'French','Gabonese','Gambian','Georgian','German','Ghanaian','Greek','Grenadian','Guatemalan','Guinean',
+  'Guyanese','Haitian','Honduran','Hungarian','Icelandic','Indian','Indonesian','Iranian','Iraqi','Irish',
+  'Israeli','Italian','Ivorian','Jamaican','Japanese','Jordanian','Kazakh','Kenyan','Kittitian','Kuwaiti',
+  'Kyrgyz','Laotian','Latvian','Lebanese','Liberian','Libyan','Liechtenstein','Lithuanian','Luxembourgish','Macedonian',
+  'Malagasy','Malawian','Malaysian','Maldivian','Malian','Maltese','Mauritanian','Mauritian','Mexican','Moldovan',
+  'Monacan','Mongolian','Montenegrin','Moroccan','Mozambican','Namibian','Nepalese','New Zealander','Nicaraguan','Nigerien',
+  'Nigerian','North Korean','Norwegian','Omani','Pakistani','Palauan','Palestinian','Panamanian','Papua New Guinean','Paraguayan',
+  'Peruvian','Polish','Portuguese','Qatari','Romanian','Russian','Rwandan','Samoan','Saudi','Scottish',
+  'Senegalese','Serbian','Seychellois','Sierra Leonean','Singaporean','Slovak','Slovenian','Somali','South African','South Korean',
+  'Spanish','Sri Lankan','Sudanese','Surinamese','Swedish','Swiss','Syrian','Taiwanese','Tajik','Tanzanian',
+  'Thai','Togolese','Tongan','Trinidadian','Tunisian','Turkish','Turkmen','Tuvaluan','Ugandan','Ukrainian',
+  'Uruguayan','Uzbek','Vanuatuan','Venezuelan','Vietnamese','Welsh','Yemeni','Zambian','Zimbabwean'
+];
+
 const PREMIUM_PLANS = {
   candidate_premium: { role: 'candidate', amount_cents: 799, currency: 'USD', name: 'Candidate Premium' },
   recruiter_premium: { role: 'recruiter', amount_cents: 2999, currency: 'USD', name: 'Recruiter Premium' }
@@ -501,6 +563,16 @@ async function handleApi(request, url, env) {
 
   /* --------------------------------------------------------------- plans */
 
+  if (path === '/api/catalog' && method === 'GET') {
+    return json({
+      categories: JOB_CATEGORIES,
+      contract_types: CONTRACT_TYPES,
+      countries: COUNTRIES,
+      nationalities: NATIONALITIES,
+      experience_levels: EXPERIENCE_LEVELS
+    });
+  }
+
   if (path === '/api/plans' && method === 'GET') {
     return json({ plans: PREMIUM_PLANS, payment_enabled: false });
   }
@@ -559,9 +631,11 @@ async function handleApi(request, url, env) {
     const country = str(url.searchParams.get('country'), 120);
     const type = str(url.searchParams.get('type'), 60);
     const term = str(url.searchParams.get('q'), 120);
+    const category = str(url.searchParams.get('category'), 120);
 
     if (country) params.append('country', `ilike.*${country}*`);
     if (type) params.append('contract_type', `eq.${type}`);
+    if (category) params.append('category', `eq.${category}`);
     if (term) {
       const safe = term.replace(/[,()*]/g, '');
       params.append('or', `(title.ilike.*${safe}*,company.ilike.*${safe}*,description.ilike.*${safe}*,category.ilike.*${safe}*)`);
@@ -726,6 +800,7 @@ async function handleApi(request, url, env) {
         profession,
         contract_type: contractType,
         experience: str(fields.experience, 60),
+        category: str(fields.category, 120),
         message: str(fields.message, 4000),
         cv_path: cvPath
       }
@@ -965,17 +1040,30 @@ async function handleApi(request, url, env) {
     if (!claims) return fail('Authentication required.', 401);
 
     const body = await request.json().catch(() => ({}));
-    const kind = body.kind === 'recruiter' ? 'recruiter_candidate' : 'admin_candidate';
+    let kind;
+    if (body.kind === 'recruiter') kind = 'recruiter_candidate';
+    else if (body.kind === 'admin') kind = claims.role === 'recruiter' ? 'admin_recruiter' : 'admin_candidate';
+    else kind = claims.role === 'recruiter' ? 'admin_recruiter' : 'admin_candidate';
 
     let candidateId = null;
     let recruiterId = null;
     let jobId = null;
 
-    if (kind === 'admin_candidate') {
-      if (claims.role === 'candidate') candidateId = claims.id;
-      else if (claims.role === 'admin') candidateId = str(body.candidate_id, 60);
-      else return fail('Access denied.', 403);
-      if (!candidateId) return fail('candidate_id is required.');
+    if (kind === 'admin_candidate' || kind === 'admin_recruiter') {
+      const isRecruiterThread = kind === 'admin_recruiter';
+      const me = isRecruiterThread ? claims.role === 'recruiter' : claims.role === 'candidate';
+      const other = isRecruiterThread ? str(body.recruiter_id, 60) : str(body.candidate_id, 60);
+
+      if (me) {
+        if (isRecruiterThread) recruiterId = claims.id;
+        else candidateId = claims.id;
+      } else if (claims.role === 'admin') {
+        if (isRecruiterThread) recruiterId = other;
+        else candidateId = other;
+        if (!other) return fail(isRecruiterThread ? 'recruiter_id is required.' : 'candidate_id is required.');
+      } else {
+        return fail('Access denied.', 403);
+      }
     } else {
       if (claims.role === 'candidate') {
         // A candidate can only reach the recruiter who published the job.
@@ -1000,10 +1088,14 @@ async function handleApi(request, url, env) {
     }
 
     // Reuse an existing thread rather than creating duplicates.
-    const lookup =
-      kind === 'admin_candidate'
-        ? `conversations?kind=eq.admin_candidate&candidate_id=eq.${candidateId}&select=${CONV_SELECT}`
-        : `conversations?kind=eq.recruiter_candidate&candidate_id=eq.${candidateId}&recruiter_id=eq.${recruiterId}&select=${CONV_SELECT}`;
+    let lookup;
+    if (kind === 'admin_candidate') {
+      lookup = `conversations?kind=eq.admin_candidate&candidate_id=eq.${candidateId}&select=${CONV_SELECT}`;
+    } else if (kind === 'admin_recruiter') {
+      lookup = `conversations?kind=eq.admin_recruiter&recruiter_id=eq.${recruiterId}&select=${CONV_SELECT}`;
+    } else {
+      lookup = `conversations?kind=eq.recruiter_candidate&candidate_id=eq.${candidateId}&recruiter_id=eq.${recruiterId}&select=${CONV_SELECT}`;
+    }
 
     const existing = await rest(env, lookup);
     if (existing && existing.length) return json({ conversation: existing[0] });
@@ -1052,12 +1144,13 @@ async function handleApi(request, url, env) {
     });
 
     const recipients = new Set();
-    if (conv.kind === 'admin_candidate') {
-      if (claims.role === 'candidate') {
+    if (conv.kind === 'admin_candidate' || conv.kind === 'admin_recruiter') {
+      const peerId = conv.kind === 'admin_candidate' ? conv.candidate_id : conv.recruiter_id;
+      if (claims.role === 'admin') {
+        if (peerId) recipients.add(peerId);
+      } else {
         const admins = await rest(env, 'users?role=eq.admin&select=id');
         (admins || []).forEach((a) => recipients.add(a.id));
-      } else if (conv.candidate_id) {
-        recipients.add(conv.candidate_id);
       }
     } else {
       if (claims.id !== conv.candidate_id) recipients.add(conv.candidate_id);

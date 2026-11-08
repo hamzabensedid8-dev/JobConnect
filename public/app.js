@@ -16,14 +16,70 @@ $("#modalContent").addEventListener("submit",async e=>{if(e.target.id!=="authFor
 $("#requestForm").addEventListener("submit",async e=>{e.preventDefault();const btn=e.target.querySelector("button[type=submit]");btn.disabled=true;$("#requestMessage").textContent="Submitting...";try{const d=await api("/api/applications",{method:"POST",body:new FormData(e.target)});$("#referenceResult").innerHTML=`<b>✓ Your request has been submitted!</b><strong>${d.reference}</strong>Keep this code safe. Use it in the Track a request section to check your request status.`;$("#referenceResult").classList.remove("hidden");$("#requestMessage").textContent="";e.target.reset();}catch(err){$("#requestMessage").textContent=err.message}finally{btn.disabled=false}});
 $("#trackForm").addEventListener("submit",async e=>{e.preventDefault();const ref=new FormData(e.target).get("reference").trim();const box=$("#trackResult");try{const d=await api("/api/applications/track/"+encodeURIComponent(ref));const a=d.application;box.innerHTML=`<b>Request ${a.reference}</b><p><b>Role:</b> ${escapeHtml(a.profession)} · <b>Country :</b> ${escapeHtml(a.target_country)}</p><p><b>Type :</b> ${escapeHtml(a.contract_type)}</p><p><b>Status :</b> <span class="status">${statusLabels[a.status]||a.status}</span></p><p><b>Last updated:</b> ${new Date(a.updated_at).toLocaleString()}</p>${a.admin_note?`<p><b>Message:</b> ${escapeHtml(a.admin_note)}</p>`:""}`;box.classList.remove("hidden")}catch(err){box.innerHTML=escapeHtml(err.message);box.classList.remove("hidden")}});
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-async function loadJobs(){const params=new URLSearchParams();if($("#jobTerm").value)params.set("q",$("#jobTerm").value);if($("#jobCountry").value)params.set("country",$("#jobCountry").value);if($("#jobType").value)params.set("type",$("#jobType").value);try{const d=await api("/api/jobs?"+params);$("#jobs").innerHTML=d.jobs.length?d.jobs.map(j=>`<article class="job"><span class="eyebrow">${escapeHtml(j.contract_type)}</span><h3>${escapeHtml(j.title)}</h3><b>${escapeHtml(j.company)}</b><p>${escapeHtml(j.description.slice(0,160))}${j.description.length>160?"…":""}</p><div class="job-meta">🌍 ${escapeHtml(j.country)} ${j.city?"· "+escapeHtml(j.city):""} · ${escapeHtml(j.workplace||"")}</div><button class="btn primary apply" data-id="${j.id}">Apply with resume</button><button class="btn light msg-job" data-job="${j.id}">Message recruiter</button></article>`).join(""):`<p class="muted">No jobs have been posted yet. Please check back soon.</p>`}catch(e){$("#jobs").innerHTML=`<p>${escapeHtml(e.message)}</p>`}}
+async function loadJobs(){const params=new URLSearchParams();if($("#jobTerm").value)params.set("q",$("#jobTerm").value);if($("#jobCountry").value)params.set("country",$("#jobCountry").value);if($("#jobType").value)params.set("type",$("#jobType").value);const catEl=$("#jobCategory");if(catEl&&catEl.value)params.set("category",catEl.value);try{const d=await api("/api/jobs?"+params);$("#jobs").innerHTML=d.jobs.length?d.jobs.map(j=>`<article class="job"><span class="eyebrow">${escapeHtml(j.contract_type)}</span><h3>${escapeHtml(j.title)}</h3><b>${escapeHtml(j.company)}</b><p>${escapeHtml(j.description.slice(0,160))}${j.description.length>160?"…":""}</p><div class="job-meta">🌍 ${escapeHtml(j.country)} ${j.city?"· "+escapeHtml(j.city):""} · ${escapeHtml(j.workplace||"")}</div><button class="btn primary apply" data-id="${j.id}">Apply with resume</button><button class="btn light msg-job" data-job="${j.id}">Message recruiter</button></article>`).join(""):`<p class="muted">No jobs have been posted yet. Please check back soon.</p>`}catch(e){$("#jobs").innerHTML=`<p>${escapeHtml(e.message)}</p>`}}
 $("#jobSearch").onclick=loadJobs;
 $("#jobs").addEventListener("click",async e=>{const b=e.target.closest(".apply");if(!b)return;if(!token){openModal("login");return}const u=currentUser;if(u?.role!=="candidate"){toast("Log in with a candidate account to apply.");return}const input=document.createElement("input");input.type="file";input.accept=".pdf,.doc,.docx";input.onchange=async()=>{const fd=new FormData();if(input.files[0])fd.append("cv",input.files[0]);try{const d=await api(`/api/jobs/${b.dataset.id}/apply`,{method:"POST",body:fd});toast("Application submitted. Reference: "+d.reference)}catch(err){toast(err.message)}};input.click()});
 async function renderDashboard(){if(!currentUser)return;let old=$("#dashboard");if(old)old.remove();const main=document.querySelector("main");const section=document.createElement("section");section.id="dashboard";section.className="dashboard section";section.innerHTML=`<div class="section-head"><span class="eyebrow">Personal dashboard</span><h2>Hello ${escapeHtml(currentUser.name)}</h2><p>${currentUser.role==="recruiter"?"Manage your job posts":"Your candidate dashboard"}</p></div><div id="dashContent"></div><button class="btn light" id="logout">Log out</button>`;main.prepend(section);$("#logout").onclick=()=>{token="";currentUser=null;localStorage.clear();section.remove();toast("You have logged out.");const l=document.getElementById("jcLauncher");if(l)l.remove()};const box=$("#dashContent");
-try{if(currentUser.role==="recruiter"){box.innerHTML=`<form id="jobForm" class="panel form-grid"><h3 class="wide">Post a job</h3><label>Job title *<input name="title" required></label><label>Company *<input name="company" required value="${escapeHtml(currentUser.company||"")}"></label><label>Country *<input name="country" required></label><label>City<input name="city"></label><label>Contract type *<select name="contract_type"><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Internship</option><option>Freelance</option></select></label><label>Work arrangement<select name="workplace"><option>On-site</option><option>Remote</option><option>Hybrid</option></select></label><label>Salary<input name="salary"></label><label>Category<input name="category"></label><label class="wide">Description *<textarea name="description" required rows="4"></textarea></label><button class="btn primary wide">Submit job</button></form><div id="recruiterJobs"></div>`;$("#jobForm").onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));const r=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});toast(r.message);e.target.reset()}catch(err){toast(err.message)}};const d=await api("/api/recruiter/jobs");const a=await api("/api/recruiter/applications");$("#recruiterJobs").addEventListener("click",async e=>{const link=e.target.closest(".cv-download");if(!link)return;e.preventDefault();try{const r=await fetch("/api/recruiter/applications/"+encodeURIComponent(link.dataset.ref)+"/cv",{headers:{Authorization:"Bearer "+token}});if(!r.ok)throw new Error("Could not download the resume.");const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="Resume-"+link.dataset.ref;a.click();URL.revokeObjectURL(url)}catch(err){toast(err.message)}});$("#recruiterJobs").innerHTML="<h3>Your jobs</h3>"+d.jobs.map(j=>`<p>${escapeHtml(j.title)} — ${escapeHtml(j.country)} · <b>${escapeHtml(j.status)}</b></p>`).join("")+"<h3>Applications received</h3>"+(a.applications.length?a.applications.map(x=>`<div class="metric"><b>${escapeHtml(x.full_name)}</b>${escapeHtml(x.job_title||x.profession)} · ${escapeHtml(x.email)}<p>${escapeHtml(x.target_country)} · ${statusLabels[x.status]||x.status} · ${x.has_cv?`<a href="#" class="cv-download" data-ref="${x.reference}">Download resume</a>`:"No resume attached"}</p></div>`).join(""):"<p>No applications received yet.</p>")}
+try{if(currentUser.role==="recruiter"){box.innerHTML=`<form id="jobForm" class="panel form-grid"><h3 class="wide">Post a job</h3><label>Job title *<input name="title" required></label><label>Company *<input name="company" required value="${escapeHtml(currentUser.company||"")}"></label><label>Country *<input name="country" required></label><label>City<input name="city"></label><label>Contract type *<select name="contract_type"><option>Permanent</option><option>Fixed-term</option><option>Temporary</option><option>Internship</option><option>Freelance</option></select></label><label>Work arrangement<select name="workplace"><option>On-site</option><option>Remote</option><option>Hybrid</option></select></label><label>Salary<input name="salary"></label><label>Category<select name="category"><option value="">Select a category</option></select></label><label class="wide">Description *<textarea name="description" required rows="4"></textarea></label><button class="btn primary wide">Submit job</button></form><div id="recruiterJobs"></div>`;$("#jobForm").onsubmit=async e=>{e.preventDefault();try{const d=Object.fromEntries(new FormData(e.target));const r=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});toast(r.message);e.target.reset()}catch(err){toast(err.message)}};const d=await api("/api/recruiter/jobs");const a=await api("/api/recruiter/applications");$("#recruiterJobs").addEventListener("click",async e=>{const link=e.target.closest(".cv-download");if(!link)return;e.preventDefault();try{const r=await fetch("/api/recruiter/applications/"+encodeURIComponent(link.dataset.ref)+"/cv",{headers:{Authorization:"Bearer "+token}});if(!r.ok)throw new Error("Could not download the resume.");const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="Resume-"+link.dataset.ref;a.click();URL.revokeObjectURL(url)}catch(err){toast(err.message)}});$("#recruiterJobs").innerHTML="<h3>Your jobs</h3>"+d.jobs.map(j=>`<p>${escapeHtml(j.title)} — ${escapeHtml(j.country)} · <b>${escapeHtml(j.status)}</b></p>`).join("")+"<h3>Applications received</h3>"+(a.applications.length?a.applications.map(x=>`<div class="metric"><b>${escapeHtml(x.full_name)}</b>${escapeHtml(x.job_title||x.profession)} · ${escapeHtml(x.email)}<p>${escapeHtml(x.target_country)} · ${statusLabels[x.status]||x.status} · ${x.has_cv?`<a href="#" class="cv-download" data-ref="${x.reference}">Download resume</a>`:"No resume attached"}</p></div>`).join(""):"<p>No applications received yet.</p>")}
 else{const d=await api("/api/candidate/applications");box.innerHTML="<h3>My requests and applications</h3>"+(d.applications.length?d.applications.map(a=>`<div class="metric"><b>${a.reference}</b>${escapeHtml(a.profession)} · ${escapeHtml(a.target_country)}<p><span class="status">${statusLabels[a.status]||a.status}</span></p></div>`).join(""):"<p>You do not have any requests linked to this account yet.</p>")}}
-catch(err){box.innerHTML=`<p>${escapeHtml(err.message)}</p>`}if(window.JCRefreshChatWidget)window.JCRefreshChatWidget()}
+catch(err){box.innerHTML=`<p>${escapeHtml(err.message)}</p>`}if(window.JCRefreshChatWidget)window.JCRefreshChatWidget();if(window.JCFillCatalogs)window.JCFillCatalogs()}
 document.querySelectorAll(".choose-plan").forEach(b=>b.addEventListener("click",()=>{const plan=b.dataset.plan;if(!token){openModal("register",plan);const roleEl=$("#modalContent select[name=role]");if(roleEl){roleEl.value=plan==="recruiter_premium"?"recruiter":"candidate";roleEl.dispatchEvent(new Event("change",{bubbles:true}))}return}api("/api/subscriptions",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({plan})}).then(d=>toast(d.message)).catch(e=>toast(e.message))}));
 $("#hamb").onclick=()=>document.querySelector(".top nav").classList.toggle("open");
 loadJobs();
 if(token&&currentUser)renderDashboard();
+
+/* ---------- thème clair / sombre ---------- */
+(function(){
+  var root=document.documentElement;
+  var btn=document.getElementById("themeToggle");
+  function paint(){
+    var dark=root.getAttribute("data-theme")==="dark";
+    if(btn)btn.textContent=dark?"☀️":"🌙";
+  }
+  if(btn)btn.addEventListener("click",function(){
+    var next=root.getAttribute("data-theme")==="dark"?"light":"dark";
+    root.setAttribute("data-theme",next);
+    try{localStorage.setItem("jc_theme",next)}catch(e){}
+    paint();
+  });
+  paint();
+})();
+
+/* ---------- ombre de l'en-tête au défilement ---------- */
+(function(){
+  var top=document.querySelector(".top");
+  if(!top)return;
+  var onScroll=function(){top.classList.toggle("scrolled",window.scrollY>8)};
+  window.addEventListener("scroll",onScroll,{passive:true});onScroll();
+})();
+
+/* ---------- apparition des blocs au défilement ---------- */
+(function(){
+  var sel=".section, .job, .plan, .stats, .panel, .track-result";
+  function prepare(){
+    var nodes=document.querySelectorAll(sel);
+    if(!("IntersectionObserver" in window)){return;}
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){en.target.classList.add("in");io.unobserve(en.target);}
+      });
+    },{rootMargin:"0px 0px -8% 0px",threshold:.08});
+    nodes.forEach(function(n){
+      if(n.closest(".dashboard"))return;
+      n.classList.add("reveal");
+      io.observe(n);
+    });
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",prepare);
+  else prepare();
+})();
+
+/* ---------- filtre catégorie sur la recherche d'offres ---------- */
+(function(){
+  var btn=document.getElementById("jobSearch");
+  if(!btn)return;
+  btn.addEventListener("click",function(){
+    var cat=document.getElementById("jobCategory");
+    if(cat)window.__jcCategory=cat.value;
+  });
+})();

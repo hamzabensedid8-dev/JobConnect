@@ -1,0 +1,440 @@
+/* ==========================================================================
+   JobConnect — couche de design : thème, fond animé, verre dépoli, animations
+   Chargée après style.css ; ne remplace rien, vient au-dessus.
+   ========================================================================== */
+
+:root {
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.65);
+  --shadow-sm: 0 2px 8px rgba(11, 27, 73, .06);
+  --shadow-md: 0 10px 30px rgba(11, 27, 73, .10);
+  --shadow-lg: 0 24px 60px rgba(11, 27, 73, .16);
+  --ring: 0 0 0 4px rgba(20, 92, 245, .16);
+  --ease: cubic-bezier(.22, .68, 0, 1);
+  --radius: 18px;
+  --surface: #ffffff;
+  --surface-2: #f7f9ff;
+  --text: #0b1b49;
+  --text-soft: #64718b;
+  --bg: #eef3ff;
+}
+
+html[data-theme="dark"] {
+  --navy: #e8eeff;
+  --blue: #4d8bff;
+  --muted: #9aa8c7;
+  --line: #22315c;
+  --pale: #0e1730;
+  --glass: rgba(17, 27, 54, 0.66);
+  --glass-strong: rgba(16, 25, 50, 0.88);
+  --glass-border: rgba(120, 150, 220, 0.18);
+  --surface: #111c38;
+  --surface-2: #0e1730;
+  --text: #e8eeff;
+  --text-soft: #9aa8c7;
+  --bg: #070d1d;
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, .55);
+}
+
+/* ---------------------------------------------------------------- fond */
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.bg-aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 0%, #dfe9ff 0%, var(--bg) 55%), var(--bg);
+}
+html[data-theme="dark"] .bg-aurora {
+  background: radial-gradient(120% 90% at 50% 0%, #14224a 0%, var(--bg) 60%), var(--bg);
+}
+
+.bg-aurora span {
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: .55;
+  will-change: transform;
+  animation: float 22s var(--ease) infinite alternate;
+}
+.bg-aurora span:nth-child(1) {
+  width: 46vw; height: 46vw; left: -8vw; top: -12vw;
+  background: radial-gradient(circle, #6f9bff, transparent 68%);
+}
+.bg-aurora span:nth-child(2) {
+  width: 38vw; height: 38vw; right: -6vw; top: 8vw;
+  background: radial-gradient(circle, #a06bff, transparent 68%);
+  animation-delay: -7s; animation-duration: 26s;
+}
+.bg-aurora span:nth-child(3) {
+  width: 42vw; height: 42vw; left: 28vw; bottom: -22vw;
+  background: radial-gradient(circle, #29d3c2, transparent 68%);
+  animation-delay: -13s; animation-duration: 30s;
+}
+html[data-theme="dark"] .bg-aurora span { opacity: .34; filter: blur(90px); }
+
+@keyframes float {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(4vw, 5vh, 0) scale(1.12); }
+  100% { transform: translate3d(-3vw, -4vh, 0) scale(.95); }
+}
+
+.bg-noise {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+}
+
+/* --------------------------------------------------------- verre dépoli */
+
+.top,
+.panel,
+.job,
+.metric,
+.track-result,
+.plan,
+.modal-card,
+.track-result,
+.dashboard .metric {
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+.top {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  background: var(--glass);
+  border-bottom: 1px solid var(--glass-border);
+  transition: box-shadow .3s var(--ease), background .3s var(--ease);
+}
+.top.scrolled { box-shadow: var(--shadow-md); background: var(--glass-strong); }
+
+.panel,
+.job,
+.metric,
+.track-result,
+.plan {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.hero {
+  background: transparent !important;
+  position: relative;
+}
+.section.soft { background: transparent !important; }
+.section.soft::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,.42) 12%, rgba(255,255,255,.42) 88%, transparent);
+}
+html[data-theme="dark"] .section.soft::before {
+  background: linear-gradient(180deg, transparent, rgba(18,30,60,.55) 12%, rgba(18,30,60,.55) 88%, transparent);
+}
+
+/* ------------------------------------------------------------- boutons */
+
+.btn {
+  position: relative;
+  overflow: hidden;
+  border-radius: 13px;
+  letter-spacing: .1px;
+  transition: transform .22s var(--ease), box-shadow .22s var(--ease),
+              background .22s var(--ease), color .22s var(--ease), border-color .22s var(--ease);
+  isolation: isolate;
+}
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: translateX(-120%) skewX(-18deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.42), transparent);
+  transition: transform .6s var(--ease);
+}
+.btn:hover::after { transform: translateX(120%) skewX(-18deg); }
+.btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.btn:active { transform: translateY(0) scale(.985); }
+.btn:focus-visible { outline: none; box-shadow: var(--ring); }
+
+.btn.primary {
+  background-image: linear-gradient(135deg, #145cf5, #4b7dff 55%, #6f9bff);
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(20, 92, 245, .28);
+}
+.btn.primary:hover { box-shadow: 0 16px 36px rgba(20, 92, 245, .34); }
+
+.btn.light {
+  background: var(--glass-strong);
+  color: var(--blue);
+  border: 1px solid var(--glass-border);
+}
+.btn.light:hover { background: var(--surface); }
+
+.btn.icon {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 17px;
+  border-radius: 12px;
+}
+
+/* petits boutons d'action dans les annonces */
+.job .btn { margin-top: 8px; }
+.job .btn.msg-job { margin-left: 0; }
+
+/* ---------------------------------------------------------- formulaires */
+
+input, select, textarea {
+  transition: border-color .2s var(--ease), box-shadow .2s var(--ease), background .2s var(--ease);
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+}
+input:hover, select:hover, textarea:hover { border-color: #b9c9ea !important; }
+input:focus, select:focus, textarea:focus {
+  box-shadow: var(--ring) !important;
+  border-color: var(--blue) !important;
+  background: var(--surface) !important;
+}
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 13px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 34px !important;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------- cartes */
+
+.job {
+  transition: transform .3s var(--ease), box-shadow .3s var(--ease), border-color .3s var(--ease);
+  position: relative;
+  overflow: hidden;
+}
+.job::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--blue), #a06bff, #29d3c2);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .45s var(--ease);
+}
+.job:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
+.job:hover::before { transform: scaleX(1); }
+.job h3 { color: var(--text); }
+.job p, .job-meta { color: var(--text-soft); }
+
+/* ------------------------------------------------------- bandeau stats */
+
+.stats {
+  background: linear-gradient(120deg, #0b1b49, #15358f 55%, #0b1b49);
+  position: relative;
+  overflow: hidden;
+}
+.stats::after {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(from 0deg, transparent, rgba(111,155,255,.16), transparent 40%);
+  animation: spin 18s linear infinite;
+  pointer-events: none;
+}
+.stats div { position: relative; z-index: 1; }
+@keyframes spin { to { transform: rotate(1turn); } }
+
+/* ---------------------------------------------------------- animations */
+
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity .7s var(--ease), transform .7s var(--ease);
+}
+.reveal.in { opacity: 1; transform: none; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+.hero-copy > * { animation: rise .8s var(--ease) both; }
+.hero-copy > *:nth-child(1) { animation-delay: .05s; }
+.hero-copy > *:nth-child(2) { animation-delay: .12s; }
+.hero-copy > *:nth-child(3) { animation-delay: .19s; }
+.hero-copy > *:nth-child(4) { animation-delay: .26s; }
+.hero-copy > *:nth-child(5) { animation-delay: .33s; }
+
+.hero-visual {
+  background: linear-gradient(145deg, rgba(220,231,255,.9), rgba(245,248,255,.75) 60%, rgba(185,204,255,.9)) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-lg);
+}
+html[data-theme="dark"] .hero-visual {
+  background: linear-gradient(145deg, #16224a, #101a34 60%, #1d2c58) !important;
+}
+.globe { animation: bob 6s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50% { transform: translateY(-14px) rotate(2deg); }
+}
+.orbit { animation: spin 26s linear infinite; }
+.float-card {
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  animation: bob 7s ease-in-out infinite;
+}
+.f2 { animation-delay: -3.5s; }
+
+/* micro-interactions */
+a, button { -webkit-tap-highlight-color: transparent; }
+.top nav a { position: relative; }
+.top nav a::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -6px;
+  height: 2px;
+  background: var(--blue);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform .3s var(--ease);
+}
+.top nav a:hover::after { transform: scaleX(1); }
+
+.eyebrow { transition: transform .25s var(--ease), box-shadow .25s var(--ease); }
+.eyebrow:hover { transform: translateY(-1px); }
+
+/* toast */
+.toast {
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: rise .35s var(--ease);
+  box-shadow: var(--shadow-lg);
+}
+
+/* modal */
+.modal { animation: fade .25s var(--ease); }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.modal-card { animation: rise .35s var(--ease); background: var(--glass-strong); }
+.modal-card h2, .modal-card p { color: var(--text); }
+.modal-card input, .modal-card select { background: var(--surface-2); color: var(--text); }
+
+/* footer */
+footer { color: var(--text-soft); }
+
+/* accessibilité : respect de "réduire les animations" */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+}
+
+/* écrans tactiles : pas d'effet de survol collant */
+@media (hover: none) {
+  .job:hover { transform: none; }
+  .btn:hover { transform: none; }
+}
+
+/* ============================================================ mode sombre
+   style.css fige plusieurs gris : on les réaligne sur le thème. */
+html[data-theme="dark"] .top nav a,
+html[data-theme="dark"] .top nav,
+html[data-theme="dark"] .top-actions .btn.light { color: #cfdaf5; }
+html[data-theme="dark"] .top nav a:hover { color: #8fb3ff; }
+html[data-theme="dark"] .top-actions .btn.light {
+  background: rgba(120, 150, 220, .12);
+  border-color: rgba(120, 150, 220, .24);
+}
+html[data-theme="dark"] .trust,
+html[data-theme="dark"] .job-meta,
+html[data-theme="dark"] .form-note,
+html[data-theme="dark"] .muted,
+html[data-theme="dark"] footer,
+html[data-theme="dark"] .section-head p,
+html[data-theme="dark"] .hero-copy > p,
+html[data-theme="dark"] .pricing-note,
+html[data-theme="dark"] .plan ul { color: var(--text-soft); }
+html[data-theme="dark"] .form-grid label,
+html[data-theme="dark"] .form-grid .check,
+html[data-theme="dark"] .modal-card form label { color: #b9c8e8; }
+html[data-theme="dark"] .eyebrow {
+  background: rgba(77, 139, 255, .16);
+  color: #9dc0ff;
+}
+html[data-theme="dark"] .status {
+  background: rgba(77, 139, 255, .18);
+  color: #9dc0ff;
+}
+html[data-theme="dark"] .result {
+  background: rgba(18, 129, 93, .16);
+  border-color: rgba(18, 129, 93, .38);
+  color: #7fe0bb;
+}
+html[data-theme="dark"] .dash-table td,
+html[data-theme="dark"] .dash-table th { border-color: var(--line); }
+html[data-theme="dark"] .logo small { color: var(--text-soft); }
+html[data-theme="dark"] .metric b,
+html[data-theme="dark"] .section-head h2,
+html[data-theme="dark"] .hero h1 { color: #eef3ff; }
+html[data-theme="dark"] .plan .price { color: #eef3ff; }
+html[data-theme="dark"] .plan.featured {
+  border-color: rgba(77, 139, 255, .6);
+  box-shadow: 0 15px 40px rgba(20, 92, 245, .28);
+}
+html[data-theme="dark"] footer { border-color: var(--line); }
+html[data-theme="dark"] .jobs .job,
+html[data-theme="dark"] .panel { color: var(--text); }
+
+/* la bascule de thème suit le système quand l'utilisateur n'a pas choisi */
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) { --bg: #070d1d; }
+}
+
+/* ------------------------------------------------- corrections mobiles */
+@media (max-width: 580px) {
+  /* garder la bascule de thème accessible sur petit écran */
+  .top-actions { display: flex !important; }
+  .top-actions .btn.light,
+  .top-actions .btn.primary { display: none; }
+  .top-actions .theme-toggle { display: inline-flex !important; }
+
+  /* laisser le globe respirer sous les cartes flottantes */
+  .hero-visual { min-height: 300px; }
+  .globe { font-size: 108px; }
+  .float-card { font-size: 10.5px; padding: 10px 12px; }
+  .f1 { top: 14px; left: 10px; }
+  .f2 { right: 10px; bottom: 14px; }
+  .orbit { width: 250px; height: 250px; }
+
+  .bg-aurora span { filter: blur(54px); opacity: .42; }
+}
