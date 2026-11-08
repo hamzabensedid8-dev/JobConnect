@@ -1,3 +1,4 @@
+
 /**
  * JobConnect — Cloudflare Worker API
  *
@@ -13,12 +14,26 @@
 
 /* global __ASSETS__ */
 
+import {
+  loadSettings,
+  sendEmail,
+  emailLayout,
+  money,
+  mailConfigured,
+  stripeConfigured,
+  stripeRequest,
+  stripeCancel,
+  verifyStripeSignature,
+  buildReceiptPdf,
+  slaState
+} from './modules.js';
+
 const ONE_DAY = 60 * 60 * 24;
 const MAX_CV_BYTES = 5 * 1024 * 1024;
 const ALLOWED_CV_EXT = ['.pdf', '.doc', '.docx'];
 const JWT_TTL_SECONDS = 12 * 60 * 60;
 
-const APPLICATION_STATUSES = ['received', 'under_review', 'shortlisted', 'approved', 'rejected', 'completed'];
+const APPLICATION_STATUSES = ['pending', 'accepted', 'rejected'];
 const JOB_STATUSES = ['pending', 'published', 'rejected', 'closed'];
 
 const CONTRACT_TYPES = ['Permanent', 'Fixed-term', 'Temporary', 'Seasonal', 'Internship', 'Apprenticeship', 'Freelance'];
@@ -83,10 +98,47 @@ const NATIONALITIES = [
   'Uruguayan','Uzbek','Vanuatuan','Venezuelan','Vietnamese','Welsh','Yemeni','Zambian','Zimbabwean'
 ];
 
-const PREMIUM_PLANS = {
-  candidate_premium: { role: 'candidate', amount_cents: 799, currency: 'USD', name: 'Candidate Premium' },
-  recruiter_premium: { role: 'recruiter', amount_cents: 2999, currency: 'USD', name: 'Recruiter Premium' }
+const PLANS = {
+  recruiter_pro: {
+    role: 'recruiter',
+    amount_cents: 9500,
+    currency: 'USD',
+    name: 'Recruiter Pro',
+    interval: 'month',
+    promotional: false,
+    features: [
+      'Publish unlimited contracts',
+      'Candidate database access',
+      'Priority moderation',
+      'Receipts and invoices included'
+    ]
+  },
+  recruiter_promo: {
+    role: 'recruiter',
+    amount_cents: 4900,
+    currency: 'USD',
+    name: 'Recruiter Promo',
+    interval: 'month',
+    promotional: true,
+    features: [
+      'Promotional rate, limited period',
+      'Publish up to 5 contracts per month',
+      'Standard moderation',
+      'Receipts and invoices included'
+    ]
+  },
+  candidate_premium: {
+    role: 'candidate',
+    amount_cents: 0,
+    currency: 'USD',
+    name: 'Candidate (free)',
+    interval: null,
+    promotional: false,
+    features: ['Free account', 'Unlimited contract requests', 'Track every request']
+  }
 };
+
+const PREMIUM_PLANS = PLANS;
 
 /* ------------------------------------------------------------------ utils */
 
@@ -310,6 +362,80 @@ async function downloadCv(env, objectPath, filename) {
   headers.set('cache-control', 'private, no-store');
   for (const key of Object.keys(corsHeaders())) headers.set(key, corsHeaders()[key]);
   return new Response(res.body, { status: 200, headers });
+}
+
+/* ------------------------------------------------------- settings & SLA */
+
+let SETTINGS_TTL = { at: 0, value: null };
+
+async function getSettings(env) {
+  const now = Date.now();
+  if (SETTINGS_TTL.value && now - SETTINGS_TTL.at < 30000) return SETTINGS_TTL.value;
+  const value = await loadSettings(env, rest);
+  SETTINGS_TTL = { at: now, value };
+  return value;
+}
+
+function priceBreakdown(job, settings) {
+  const fee = Number(settings.jobconnect_fee_cents || 0);
+  const recruiterPrice = job && job.recruiter_price_cents != null
+    ? Number(job.recruiter_price_cents)
+    : Number(settings.default_recruiter_price_cents || 0);
+  return {
+    fee_cents: fee,
+    recruiter_price_cents: recruiterPrice,
+    total_cents: fee + recruiterPrice,
+    currency: (job && job.currency) || settings.currency || 'USD'
+  };
+}
+
+/** Un recruteur doit avoir un abonnement actif pour publier. */
+async function activeSubscription(env, userId) {
+  const nowIso = new Date().toISOString();
+  const rows = await rest(
+    env,
+    `subscriptions?user_id=eq.${userId}&status=eq.active&select=id,plan,status,current_period_end,created_at&order=created_at.desc&limit=1`
+  );
+  const sub = (rows || [])[0];
+  if (!sub) return null;
+  if (sub.current_period_end && sub.current_period_end < nowIso) return null;
+  return sub;
+}
+
+async function audit(env, actorId, action, target, detail) {
+  try {
+    await rest(env, 'audit_log', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: { actor_id: actorId, action, target, detail: detail || null }
+    });
+  } catch (err) {
+    console.error('audit failed:', err && err.message ? err.message : err);
+  }
+}
+
+function publicApplication(a, settings) {
+  return {
+    reference: a.reference,
+    full_name: a.full_name,
+    profession: a.profession,
+    category: a.category,
+    target_country: a.target_country,
+    contract_type: a.contract_type,
+    status: a.status,
+    decision_reason: a.decision_reason || null,
+    admin_note: a.decision_reason || a.admin_note || null,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+    decided_at: a.decided_at || null,
+    response_due_at: a.response_due_at || null,
+    fee_cents: a.fee_cents,
+    recruiter_price_cents: a.recruiter_price_cents,
+    total_cents: a.total_cents,
+    currency: a.currency || (settings && settings.currency) || 'USD',
+    paid_at: a.paid_at || null,
+    job_id: a.job_id || null
+  };
 }
 
 /* ----------------------------------------------------------- notifications */
@@ -579,35 +705,19 @@ async function handleApi(request, url, env) {
 
   if (path === '/api/subscriptions' && method === 'POST') {
     if (!claims) return fail('Authentication required.', 401);
-    if (!['candidate', 'recruiter'].includes(claims.role)) {
-      return fail('Access denied.', 403);
+    if (claims.role === 'admin') return fail('Access denied.', 403);
+
+    // Les candidats sont gratuits : rien à souscrire.
+    if (claims.role === 'candidate') {
+      return json({
+        status: 'free',
+        message: 'Candidate accounts are free. No subscription or payment is required to apply.'
+      });
     }
-    const body = await request.json().catch(() => ({}));
-    const plan = PREMIUM_PLANS[body.plan];
-    if (!plan || plan.role !== claims.role) {
-      return fail('This premium plan is not available for your account type.');
-    }
-    const rows = await rest(env, 'subscriptions', {
-      method: 'POST',
-      prefer: 'return=representation',
-      body: {
-        user_id: claims.id,
-        plan: body.plan,
-        amount_cents: plan.amount_cents,
-        currency: plan.currency,
-        status: 'pending_payment'
-      }
-    });
-    return json(
-      {
-        subscription_id: rows[0].id,
-        plan: plan.name,
-        amount_cents: plan.amount_cents,
-        currency: plan.currency,
-        status: 'pending_payment',
-        message: 'Your subscription request is saved. Online payment is not enabled yet.'
-      },
-      201
+
+    return fail(
+      'Recruiter plans require a card payment. Use POST /api/subscriptions/checkout to start the Stripe Checkout session.',
+      402
     );
   }
 
@@ -642,7 +752,18 @@ async function handleApi(request, url, env) {
     }
 
     const jobs = await rest(env, `jobs?${params.toString()}`);
-    return json({ jobs: jobs || [] });
+    const settings = await getSettings(env);
+    return json({
+      jobs: (jobs || []).map((j) => {
+        const p = priceBreakdown(j, settings);
+        return { ...j, pricing: p };
+      }),
+      pricing_defaults: {
+        fee_cents: Number(settings.jobconnect_fee_cents),
+        recruiter_price_cents: Number(settings.default_recruiter_price_cents),
+        currency: settings.currency
+      }
+    });
   }
 
   if (path === '/api/jobs' && method === 'POST') {
@@ -660,6 +781,23 @@ async function handleApi(request, url, env) {
       return fail('Please fill in all required fields.');
     }
 
+    // Les recruteurs doivent être abonnés (95 USD/mois ou formule promo) pour publier.
+    if (claims.role === 'recruiter') {
+      const sub = await activeSubscription(env, claims.id);
+      if (!sub) {
+        return fail(
+          'An active recruiter subscription is required to publish contracts. ' +
+            'Subscribe to Recruiter Pro (95 USD/month) or the promotional plan first.',
+          402
+        );
+      }
+    }
+
+    const settings = await getSettings(env);
+    const recruiterPrice = body.recruiter_price_cents != null
+      ? Math.max(0, Math.min(10000000, Math.round(Number(body.recruiter_price_cents))))
+      : Number(settings.default_recruiter_price_cents || 15000);
+
     const status = claims.role === 'admin' ? 'published' : 'pending';
     const rows = await rest(env, 'jobs', {
       method: 'POST',
@@ -675,6 +813,11 @@ async function handleApi(request, url, env) {
         workplace: str(body.workplace, 40) || 'On-site',
         salary: str(body.salary, 120),
         category: str(body.category, 120),
+        recruiter_price_cents: recruiterPrice,
+        currency: str(body.currency, 8) || settings.currency || 'USD',
+        visa_sponsorship: Boolean(body.visa_sponsorship),
+        duration_months: body.duration_months ? Number(body.duration_months) : null,
+        positions: body.positions ? Math.max(1, Number(body.positions)) : 1,
         status
       }
     });
@@ -720,7 +863,11 @@ async function handleApi(request, url, env) {
       if (file) cvPath = await uploadCv(env, file, `applications/${user.id}`);
     }
 
+    const settings = await getSettings(env);
+    const pricing = priceBreakdown(job, settings);
     const reference = randomReference();
+    const dueAt = new Date(Date.now() + Number(settings.sla_target_max_minutes || 20) * 60000).toISOString();
+
     await rest(env, 'applications', {
       method: 'POST',
       prefer: 'return=minimal',
@@ -732,9 +879,16 @@ async function handleApi(request, url, env) {
         email: user.email,
         target_country: job.country,
         profession: job.title,
+        category: job.category,
         contract_type: job.contract_type,
         message: `Application for job #${job.id}`,
-        cv_path: cvPath
+        cv_path: cvPath,
+        status: 'pending',
+        response_due_at: dueAt,
+        fee_cents: pricing.fee_cents,
+        recruiter_price_cents: pricing.recruiter_price_cents,
+        total_cents: pricing.total_cents,
+        currency: pricing.currency
       }
     });
 
@@ -785,12 +939,27 @@ async function handleApi(request, url, env) {
     );
     const candidateId = candidates && candidates[0] ? candidates[0].id : null;
 
+    const settings = await getSettings(env);
+    const directPricing = {
+      fee_cents: Number(settings.jobconnect_fee_cents || 0),
+      recruiter_price_cents: 0,
+      total_cents: Number(settings.jobconnect_fee_cents || 0),
+      currency: settings.currency || 'USD'
+    };
+    const directDueAt = new Date(Date.now() + Number(settings.sla_target_max_minutes || 20) * 60000).toISOString();
+
     await rest(env, 'applications', {
       method: 'POST',
       prefer: 'return=minimal',
       body: {
         reference,
         candidate_id: candidateId,
+        status: 'pending',
+        response_due_at: directDueAt,
+        fee_cents: directPricing.fee_cents,
+        recruiter_price_cents: directPricing.recruiter_price_cents,
+        total_cents: directPricing.total_cents,
+        currency: directPricing.currency,
         full_name: fullName,
         email,
         phone: str(fields.phone, 60),
@@ -825,11 +994,13 @@ async function handleApi(request, url, env) {
   const trackMatch = path.match(/^\/api\/applications\/track\/(.+)$/);
   if (trackMatch && method === 'GET') {
     const reference = decodeURIComponent(trackMatch[1]).toUpperCase();
-    const fields =
-      'reference,full_name,target_country,profession,contract_type,status,admin_note,created_at,updated_at';
+    const fields = '*';
     const rows = await rest(env, `applications?reference=eq.${encodeURIComponent(reference)}&select=${fields}`);
     if (!rows || !rows.length) return fail('No request found for this code.', 404);
-    return json({ application: rows[0] });
+    const settings = await getSettings(env);
+    return json({
+      application: { ...publicApplication(rows[0], settings), sla: slaState(rows[0], settings) }
+    });
   }
 
   if (path === '/api/candidate/applications' && method === 'GET') {
@@ -889,7 +1060,8 @@ async function handleApi(request, url, env) {
   }
 
   if (path === '/api/admin/overview' && method === 'GET') {
-    const [users, applications, jobs, subscriptions, latestApplications, latestJobs] = await Promise.all([
+    const settings = await getSettings(env);
+    const [users, applications, jobs, subscriptions, latestApplications, latestJobs, payments, activeSubs] = await Promise.all([
       rest(env, 'users?select=role'),
       rest(env, 'applications?select=status'),
       rest(env, 'jobs?select=status'),
@@ -898,8 +1070,27 @@ async function handleApi(request, url, env) {
         env,
         'applications?select=reference,full_name,email,profession,target_country,status,created_at&order=created_at.desc&limit=30'
       ),
-      rest(env, 'jobs?select=id,title,company,country,status,created_at&order=created_at.desc&limit=30')
+      rest(env, 'jobs?select=id,title,company,country,status,created_at&order=created_at.desc&limit=30'),
+      rest(env, 'payments?select=status,total_cents,fee_cents,recruiter_price_cents,currency,paid_at,created_at'),
+      rest(env, 'subscriptions?status=eq.active&select=id,plan,amount_cents,current_period_end')
     ]);
+
+    const paid = (payments || []).filter((p) => p.status === 'paid');
+    const revenueFees = paid.reduce((sum, p) => sum + Number(p.fee_cents || 0), 0);
+    const revenueRecruiter = paid.reduce((sum, p) => sum + Number(p.recruiter_price_cents || 0), 0);
+    const pending = (latestApplications || []).filter((a) => a.status === 'pending');
+    const overdue = pending.filter((a) => slaState(a, settings).overdue);
+    const responded = (latestApplications || []).filter((a) => a.first_response_at);
+    const avgMinutes = responded.length
+      ? Math.round(
+          responded.reduce(
+            (sum, a) =>
+              sum +
+              (new Date(a.first_response_at).getTime() - new Date(a.created_at).getTime()) / 60000,
+            0
+          ) / responded.length
+        )
+      : null;
 
     const groupBy = (rows, key) => {
       const map = new Map();
@@ -912,8 +1103,27 @@ async function handleApi(request, url, env) {
       applications: groupBy(applications, 'status'),
       jobs: groupBy(jobs, 'status'),
       subscriptions: groupBy(subscriptions, 'status'),
-      latestApplications: latestApplications || [],
-      latestJobs: latestJobs || []
+      latestApplications: (latestApplications || []).map((a) => ({
+        ...a,
+        sla: slaState(a, settings)
+      })),
+      latestJobs: latestJobs || [],
+      revenue: {
+        currency: settings.currency,
+        payments_count: paid.length,
+        jobconnect_fees_cents: revenueFees,
+        recruiter_prices_cents: revenueRecruiter,
+        total_cents: revenueFees + revenueRecruiter
+      },
+      sla: {
+        target_min_minutes: Number(settings.sla_target_min_minutes),
+        target_max_minutes: Number(settings.sla_target_max_minutes),
+        pending_count: pending.length,
+        overdue_count: overdue.length,
+        average_response_minutes: avgMinutes
+      },
+      active_subscriptions: (activeSubs || []).length,
+      integrations: { payments: stripeConfigured(env), email: mailConfigured(env) }
     });
   }
 
@@ -944,20 +1154,126 @@ async function handleApi(request, url, env) {
   const adminAppMatch = path.match(/^\/api\/admin\/applications\/(.+)$/);
   if (adminAppMatch && method === 'PATCH') {
     const body = await request.json().catch(() => ({}));
-    if (!APPLICATION_STATUSES.includes(body.status)) return fail('Invalid status.');
+    if (!APPLICATION_STATUSES.includes(body.status)) {
+      return fail('Invalid status. Use pending, accepted or rejected.');
+    }
     const reference = decodeURIComponent(adminAppMatch[1]).toUpperCase();
+
+    // Rejet : le motif est obligatoire et doit être explicite.
+    const reason = str(body.decision_reason ?? body.admin_note, 2000);
+    if (body.status === 'rejected' && (!reason || reason.trim().length < 5)) {
+      return fail('A rejection reason of at least 5 characters is required.', 422);
+    }
+
+    const existing = await rest(env, `applications?reference=eq.${encodeURIComponent(reference)}&select=*`);
+    const current = existing && existing[0];
+    if (!current) return fail('Request not found.', 404);
+
+    const nowIso = new Date().toISOString();
+    const patch = {
+      status: body.status,
+      decision_reason: body.status === 'pending' ? null : reason || null,
+      updated_at: nowIso,
+      first_response_at: current.first_response_at || nowIso
+    };
+    if (body.status !== 'pending') {
+      patch.decided_at = nowIso;
+      patch.decided_by = claims.id;
+    }
 
     const rows = await rest(env, `applications?reference=eq.${encodeURIComponent(reference)}`, {
       method: 'PATCH',
       prefer: 'return=representation',
-      body: {
-        status: body.status,
-        admin_note: str(body.admin_note, 2000),
-        updated_at: new Date().toISOString()
-      }
+      body: patch
     });
     if (!rows || !rows.length) return fail('Request not found.', 404);
-    return json({ message: 'Request updated.' });
+
+    const settings = await getSettings(env);
+    const updated = rows[0];
+
+    // Le candidat est prévenu par e-mail (réel) si l'infrastructure est configurée.
+    await sendEmail(env, rest, {
+      to: updated.email,
+      userId: updated.candidate_id,
+      template: `decision_${updated.status}`,
+      subject: updated.status === 'accepted'
+        ? `Your JobConnect request ${reference} has been accepted`
+        : `Your JobConnect request ${reference} has been reviewed`,
+      html: emailLayout(
+        updated.status === 'accepted' ? 'Good news, your request was accepted' : 'Update on your request',
+        `<p>Hello ${updated.full_name},</p>
+         <p>Your request <b>${reference}</b> (${updated.profession} → ${updated.target_country}) is now
+         <b>${updated.status.toUpperCase()}</b>.</p>
+         ${reason ? `<p style="background:#f4f7ff;padding:12px;border-radius:8px"><b>Message:</b> ${reason}</p>` : ''}
+         <p>Reference: <b>${reference}</b></p>`,
+        'JobConnect does not guarantee a visa, an offer or employment.'
+      )
+    });
+
+    await audit(env, claims.id, `application_${updated.status}`, reference, {
+      reason: reason || null,
+      sla: slaState(updated, settings)
+    });
+
+    return json({
+      message: 'Request updated.',
+      application: publicApplication(updated, settings),
+      sla: slaState(updated, settings),
+      email: mailConfigured(env) ? 'sent' : 'not_configured'
+    });
+  }
+
+  /* ------------------------------------------------ décision recruteur */
+
+  const recruiterDecision = path.match(/^\/api\/recruiter\/applications\/(.+)\/decision$/);
+  if (recruiterDecision && method === 'PATCH') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (!['recruiter', 'admin'].includes(claims.role)) return fail('Access denied.', 403);
+
+    const body = await request.json().catch(() => ({}));
+    if (!['accepted', 'rejected'].includes(body.status)) {
+      return fail('Status must be accepted or rejected.');
+    }
+    const reason = str(body.decision_reason, 2000);
+    if (body.status === 'rejected' && (!reason || reason.trim().length < 5)) {
+      return fail('A rejection reason of at least 5 characters is required.', 422);
+    }
+
+    const reference = decodeURIComponent(recruiterDecision[1]).toUpperCase();
+    const rows = await rest(
+      env,
+      `applications?reference=eq.${encodeURIComponent(reference)}&select=*,jobs(recruiter_id)`
+    );
+    const app = rows && rows[0];
+    if (!app) return fail('Request not found.', 404);
+    if (claims.role === 'recruiter' && (!app.jobs || app.jobs.recruiter_id !== claims.id)) {
+      return fail('Access denied.', 403);
+    }
+    if (!app.paid_at) {
+      return fail('The candidate has not completed the payment yet.', 402);
+    }
+
+    const nowIso = new Date().toISOString();
+    const updatedRows = await rest(env, `applications?reference=eq.${encodeURIComponent(reference)}`, {
+      method: 'PATCH',
+      prefer: 'return=representation',
+      body: {
+        status: body.status,
+        decision_reason: reason || null,
+        first_response_at: app.first_response_at || nowIso,
+        decided_at: nowIso,
+        decided_by: claims.id,
+        updated_at: nowIso
+      }
+    });
+
+    const settings = await getSettings(env);
+    await audit(env, claims.id, `recruiter_${body.status}`, reference, { reason: reason || null });
+    return json({
+      message: 'Decision recorded.',
+      application: publicApplication(updatedRows[0], settings),
+      sla: slaState(updatedRows[0], settings)
+    });
   }
 
   const adminJobMatch = path.match(/^\/api\/admin\/jobs\/(\d+)$/);
@@ -1261,6 +1577,428 @@ async function handleApi(request, url, env) {
       });
     }
     return json({ message: 'Notifications marked as read.' });
+  }
+
+
+  /* ------------------------------------------------------- paiements */
+
+  if (path === '/api/payments/checkout' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    const body = await request.json().catch(() => ({}));
+    const reference = str(body.reference, 40);
+    if (!reference) return fail('reference is required.');
+
+    const rows = await rest(
+      env,
+      `applications?reference=eq.${encodeURIComponent(reference.toUpperCase())}&select=*`
+    );
+    const app = rows && rows[0];
+    if (!app) return fail('Request not found.', 404);
+    if (app.candidate_id && app.candidate_id !== claims.id && claims.role !== 'admin') {
+      return fail('Access denied.', 403);
+    }
+    if (app.paid_at) return fail('This request is already paid.', 409);
+
+    if (!stripeConfigured(env)) {
+      return fail(
+        'Card payments are not configured on this deployment ' +
+          '(STRIPE_SECRET_KEY is missing). No payment was attempted.',
+        503
+      );
+    }
+
+    const settings = await getSettings(env);
+    const fee = Number(app.fee_cents != null ? app.fee_cents : settings.jobconnect_fee_cents);
+    const recruiterPrice = Number(app.recruiter_price_cents || 0);
+    const total = Number(app.total_cents != null ? app.total_cents : fee + recruiterPrice);
+    const currency = (app.currency || settings.currency || 'USD').toLowerCase();
+
+    const paymentRef = `JC-PAY-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const inserted = await rest(env, 'payments', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: {
+        reference: paymentRef,
+        application_id: app.id,
+        payer_id: claims.id,
+        kind: 'application',
+        fee_cents: fee,
+        recruiter_price_cents: recruiterPrice,
+        total_cents: total,
+        currency: currency.toUpperCase(),
+        status: 'pending'
+      }
+    });
+
+    const origin = env.PUBLIC_URL || new URL(request.url).origin;
+    const session = await stripeRequest(env, 'checkout/sessions', {
+      mode: 'payment',
+      'payment_method_types[0]': 'card',
+      'line_items[0][quantity]': 1,
+      'line_items[0][price_data][currency]': currency,
+      'line_items[0][price_data][unit_amount]': total,
+      'line_items[0][price_data][product_data][name]': `JobConnect request ${app.reference}`,
+      'line_items[0][price_data][product_data][description]':
+        `JobConnect fee ${money(fee, currency.toUpperCase())} + recruiter price ${money(recruiterPrice, currency.toUpperCase())}`,
+      customer_email: app.email,
+      client_reference_id: app.reference,
+      success_url: `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/payment/cancel?reference=${encodeURIComponent(app.reference)}`,
+      'metadata[application_reference]': app.reference,
+      'metadata[payment_reference]': paymentRef
+    });
+
+    await rest(env, `payments?id=eq.${inserted[0].id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: { provider_session_id: session.id }
+    });
+
+    return json({
+      payment_reference: paymentRef,
+      checkout_url: session.url,
+      total_cents: total,
+      fee_cents: fee,
+      recruiter_price_cents: recruiterPrice,
+      currency: currency.toUpperCase()
+    }, 201);
+  }
+
+  if (path === '/api/payments/session' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    const sessionId = str(url.searchParams.get('session_id'), 200);
+    if (!sessionId) return fail('session_id is required.');
+    const rows = await rest(env, `payments?provider_session_id=eq.${encodeURIComponent(sessionId)}&select=*`);
+    const payment = rows && rows[0];
+    if (!payment) return fail('Payment not found.', 404);
+    if (claims.role !== 'admin' && payment.payer_id !== claims.id) return fail('Access denied.', 403);
+
+    const apps = payment.application_id
+      ? await rest(env, `applications?id=eq.${payment.application_id}&select=reference,status,profession,target_country`)
+      : [];
+    return json({
+      payment: {
+        reference: payment.reference,
+        status: payment.status,
+        total_cents: payment.total_cents,
+        fee_cents: payment.fee_cents,
+        recruiter_price_cents: payment.recruiter_price_cents,
+        currency: payment.currency,
+        receipt_number: payment.receipt_number
+      },
+      application: (apps || [])[0] || null
+    });
+  }
+
+  if (path === '/api/payments/mine' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    const rows = await rest(
+      env,
+      `payments?payer_id=eq.${claims.id}&select=reference,kind,fee_cents,recruiter_price_cents,total_cents,currency,status,paid_at,receipt_number,created_at&order=created_at.desc`
+    );
+    return json({ payments: rows || [] });
+  }
+
+  const receiptMatch = path.match(/^\/api\/payments\/(.+)\/receipt\.pdf$/);
+  if (receiptMatch && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    const ref = decodeURIComponent(receiptMatch[1]).toUpperCase();
+    const rows = await rest(env, `payments?reference=eq.${encodeURIComponent(ref)}&select=*`);
+    const payment = rows && rows[0];
+    if (!payment) return fail('Payment not found.', 404);
+    if (claims.role !== 'admin' && payment.payer_id !== claims.id) {
+      return fail('Access denied.', 403);
+    }
+    if (payment.status !== 'paid') return fail('This payment is not completed yet.', 409);
+
+    const payers = await rest(env, `users?id=eq.${payment.payer_id}&select=name,email`);
+    const payer = (payers && payers[0]) || {};
+
+    const pdf = buildReceiptPdf({
+      receiptNumber: payment.receipt_number || payment.reference,
+      date: new Date(payment.paid_at || payment.created_at).toISOString().slice(0, 10),
+      payerName: payer.name,
+      payerEmail: payer.email,
+      currency: payment.currency,
+      total: payment.total_cents,
+      lines: [
+        { label: 'JobConnect fee', amount_cents: payment.fee_cents },
+        { label: 'Recruiter price', amount_cents: payment.recruiter_price_cents }
+      ]
+    });
+
+    return new Response(pdf, {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': `attachment; filename="receipt-${payment.reference}.pdf"`,
+        'cache-control': 'private, no-store'
+      }
+    });
+  }
+
+  /* --------------------------------------------- webhook Stripe (public) */
+
+  if (path === '/api/webhooks/stripe' && method === 'POST') {
+    const raw = await request.text();
+    const signature = request.headers.get('stripe-signature');
+    const secret = env.STRIPE_WEBHOOK_SECRET;
+
+    if (!secret) {
+      return fail('Stripe webhook secret is not configured.', 503);
+    }
+    const valid = await verifyStripeSignature(raw, signature, secret);
+    if (!valid) return fail('Invalid Stripe signature.', 400);
+
+    let event;
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return fail('Invalid payload.', 400);
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object || {};
+      const metadata = session.metadata || {};
+
+      // Abonnement recruteur : on active immédiatement pour 30 jours.
+      if (metadata.kind === 'subscription' && metadata.subscription_id) {
+        const periodEnd = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString();
+        await rest(env, `subscriptions?id=eq.${metadata.subscription_id}`, {
+          method: 'PATCH',
+          prefer: 'return=minimal',
+          body: {
+            status: 'active',
+            current_period_end: periodEnd,
+            stripe_session_id: session.id || null,
+            stripe_customer_id: session.customer || null,
+            updated_at: new Date().toISOString()
+          }
+        });
+
+        if (metadata.user_id) {
+          await notify(env, metadata.user_id, {
+            type: 'subscription_active',
+            title: 'Subscription active',
+            body: 'You can now publish contracts.'
+          });
+        }
+        return json({ received: true, subscription: 'activated' });
+      }
+
+      const paymentRef = metadata.payment_reference;
+
+      let payment = null;
+      if (paymentRef) {
+        const rows = await rest(env, `payments?reference=eq.${encodeURIComponent(paymentRef)}&select=*`);
+        payment = rows && rows[0];
+      }
+      if (!payment && session.id) {
+        const rows = await rest(env, `payments?provider_session_id=eq.${encodeURIComponent(session.id)}&select=*`);
+        payment = rows && rows[0];
+      }
+      if (!payment) return json({ received: true, ignored: 'unknown payment' });
+
+      if (payment.status === 'paid') return json({ received: true, idempotent: true });
+
+      const nowIso = new Date().toISOString();
+      const receiptNumber = `JC-R-${new Date().getUTCFullYear()}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+
+      await rest(env, `payments?id=eq.${payment.id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: {
+          status: 'paid',
+          paid_at: nowIso,
+          receipt_number: receiptNumber,
+          provider_session_id: session.id || payment.provider_session_id,
+          provider_payment_intent: session.payment_intent || null
+        }
+      });
+
+      if (payment.application_id) {
+        await rest(env, `applications?id=eq.${payment.application_id}`, {
+          method: 'PATCH',
+          prefer: 'return=minimal',
+          body: { paid_at: nowIso }
+        });
+      }
+
+      const apps = payment.application_id
+        ? await rest(env, `applications?id=eq.${payment.application_id}&select=*`)
+        : [];
+      const app = (apps || [])[0];
+
+      if (app) {
+        await sendEmail(env, rest, {
+          to: app.email,
+          userId: app.candidate_id,
+          template: 'payment_receipt',
+          subject: `JobConnect payment receipt ${receiptNumber}`,
+          html: emailLayout(
+            'Payment confirmed',
+            `<p>Hello ${app.full_name},</p>
+             <p>We received your payment for request <b>${app.reference}</b>.</p>
+             <table style="width:100%;font-size:13px;border-collapse:collapse">
+               <tr><td style="padding:6px 0">JobConnect fee</td><td align="right">${money(payment.fee_cents, payment.currency)}</td></tr>
+               <tr><td style="padding:6px 0">Recruiter price</td><td align="right">${money(payment.recruiter_price_cents, payment.currency)}</td></tr>
+               <tr><td style="padding:10px 0;font-weight:800">Total paid</td><td align="right" style="font-weight:800">${money(payment.total_cents, payment.currency)}</td></tr>
+             </table>
+             <p>Receipt number: <b>${receiptNumber}</b></p>
+             <p>Your application documents and this receipt are available in your dashboard.</p>`,
+            'Keep this receipt for your records.'
+          )
+        });
+
+        await notify(env, app.candidate_id, {
+          type: 'payment_confirmed',
+          title: 'Payment confirmed',
+          body: `Receipt ${receiptNumber} — ${money(payment.total_cents, payment.currency)}`,
+          application_ref: app.reference
+        });
+      }
+
+      return json({ received: true });
+    }
+
+    if (event.type === 'checkout.session.expired' || event.type === 'payment_intent.payment_failed') {
+      const session = event.data.object || {};
+      const paymentRef = (session.metadata || {}).payment_reference;
+      if (paymentRef) {
+        await rest(env, `payments?reference=eq.${encodeURIComponent(paymentRef)}`, {
+          method: 'PATCH',
+          prefer: 'return=minimal',
+          body: { status: 'failed' }
+        });
+      }
+      return json({ received: true });
+    }
+
+    return json({ received: true, ignored: event.type });
+  }
+
+  /* --------------------------------------------------- réglages admin */
+
+  if (path === '/api/admin/settings' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    const settings = await loadSettings(env, rest);
+    return json({
+      settings,
+      integrations: {
+        payments: stripeConfigured(env),
+        email: mailConfigured(env)
+      }
+    });
+  }
+
+  if (path === '/api/admin/settings' && method === 'PATCH') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    const body = await request.json().catch(() => ({}));
+    const allowed = [
+      'jobconnect_fee_cents',
+      'sla_target_min_minutes',
+      'sla_target_max_minutes',
+      'default_recruiter_price_cents',
+      'recruiter_price_cents',
+      'promo_price_cents',
+      'currency'
+    ];
+    const updates = [];
+    for (const [key, value] of Object.entries(body)) {
+      if (!allowed.includes(key)) continue;
+      updates.push({ key, value: String(value) });
+    }
+    if (!updates.length) return fail('No valid setting provided.');
+
+    for (const item of updates) {
+      await rest(env, 'settings?on_conflict=key', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates,return=minimal',
+        body: { key: item.key, value: item.value, updated_at: new Date().toISOString() }
+      });
+    }
+    SETTINGS_TTL = { at: 0, value: null };
+    await audit(env, claims.id, 'settings_updated', 'platform', Object.fromEntries(updates.map((u) => [u.key, u.value])));
+    return json({ message: 'Settings updated.', settings: await loadSettings(env, rest) });
+  }
+
+  if (path === '/api/admin/email-log' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    const rows = await rest(env, 'email_log?select=*&order=created_at.desc&limit=50');
+    return json({ emails: rows || [] });
+  }
+
+  if (path === '/api/admin/audit-log' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+    const rows = await rest(env, 'audit_log?select=*&order=created_at.desc&limit=50');
+    return json({ entries: rows || [] });
+  }
+
+  /* ------------------------------------------------------ abonnements */
+
+  if (path === '/api/subscriptions/checkout' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'recruiter') return fail('Recruiter accounts only.', 403);
+
+    const body = await request.json().catch(() => ({}));
+    const planKey = body.plan === 'recruiter_promo' ? 'recruiter_promo' : 'recruiter_pro';
+    const plan = PLANS[planKey];
+
+    const existing = await activeSubscription(env, claims.id);
+    if (existing) return fail('You already have an active subscription.', 409);
+
+    if (!stripeConfigured(env)) {
+      return fail(
+        'Card payments are not configured on this deployment (STRIPE_SECRET_KEY is missing). ' +
+          'No subscription was created.',
+        503
+      );
+    }
+
+    const settings = await getSettings(env);
+    // La formule promo utilise le tarif promotionnel configuré par l'admin.
+    const amount = plan.promotional
+      ? Number(body.amount_cents || settings.promo_price_cents || plan.amount_cents)
+      : Number(settings.recruiter_price_cents || plan.amount_cents);
+
+    const subRows = await rest(env, 'subscriptions', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: {
+        user_id: claims.id,
+        plan: planKey,
+        amount_cents: amount,
+        currency: 'USD',
+        status: 'pending_payment'
+      }
+    });
+
+    const origin = env.PUBLIC_URL || new URL(request.url).origin;
+    const session = await stripeRequest(env, 'checkout/sessions', {
+      mode: 'payment',
+      'payment_method_types[0]': 'card',
+      'line_items[0][quantity]': 1,
+      'line_items[0][price_data][currency]': 'usd',
+      'line_items[0][price_data][unit_amount]': amount,
+      'line_items[0][price_data][product_data][name]': `${plan.name} — 1 month`,
+      customer_email: claims.email || undefined,
+      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/billing/cancel`,
+      'metadata[subscription_id]': String(subRows[0].id),
+      'metadata[kind]': 'subscription',
+      'metadata[user_id]': claims.id
+    });
+
+    await rest(env, `subscriptions?id=eq.${subRows[0].id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: { stripe_session_id: session.id }
+    });
+
+    return json({ checkout_url: session.url, subscription_id: subRows[0].id, amount_cents: amount }, 201);
   }
 
   /* ------------------------------------------------------------- devices */

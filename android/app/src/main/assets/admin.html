@@ -115,11 +115,13 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
     <button data-view="jobs">Jobs</button>
     <button data-view="chats">Chats</button>
     <button data-view="notifs">Alerts</button>
+    <button data-view="settings">Settings</button>
   </nav>
 
   <main>
     <div class="view on" id="view-overview">
       <div class="grid" id="stats"></div>
+      <p class="muted" id="slaLine" style="margin:-4px 0 14px"></p>
       <h3>Latest requests</h3>
       <div id="latest"></div>
     </div>
@@ -129,12 +131,9 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
         <span class="muted" id="reqCount"></span>
         <select id="reqFilter" style="width:auto;padding:9px;font-size:12px">
           <option value="">All statuses</option>
-          <option value="received">Received</option>
-          <option value="under_review">Under review</option>
-          <option value="shortlisted">Shortlisted</option>
-          <option value="approved">Approved</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
           <option value="rejected">Rejected</option>
-          <option value="completed">Completed</option>
         </select>
       </div>
       <div id="reqList"></div>
@@ -147,6 +146,29 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted
     </div>
 
     <div class="view" id="view-notifs"><div id="notifList"></div></div>
+
+    <div class="view" id="view-settings">
+      <h3>Platform pricing and SLA</h3>
+      <div class="card">
+        <label>JobConnect fee (cents)</label>
+        <input id="setFee" type="number" min="0" step="100">
+        <label>Recruiter price per contract (cents)</label>
+        <input id="setRecruiterPrice" type="number" min="0" step="100">
+        <label>Promotional plan price (cents)</label>
+        <input id="setPromo" type="number" min="0" step="100">
+        <label>Target response — minimum (minutes)</label>
+        <input id="setSlaMin" type="number" min="1" max="120">
+        <label>Target response — maximum (minutes)</label>
+        <input id="setSlaMax" type="number" min="1" max="240">
+        <label>Currency</label>
+        <input id="setCurrency" type="text" maxlength="8">
+        <button class="btn" id="saveSettings">Save settings</button>
+      </div>
+      <h3>Integrations</h3>
+      <div class="card" id="integrations"></div>
+      <h3>Recent e-mails</h3>
+      <div id="emailLog"></div>
+    </div>
   </main>
 </div>
 
@@ -223,6 +245,7 @@ function enter(user){
   loadJobs();
   loadConvs();
   loadNotifs();
+  loadSettings();
 }
 
 document.getElementById("logout").onclick = function(){
@@ -246,12 +269,23 @@ async function loadOverview(){
   try{
     var d = await api("/api/admin/overview");
     var sum = function(arr){return (arr||[]).reduce(function(s,x){return s + x.count;},0);};
+    var money = function(c){ return "$" + ((Number(c||0))/100).toFixed(2); };
     var cards = [
       ["Accounts", sum(d.users)],
       ["Requests", sum(d.applications)],
-      ["Job posts", sum(d.jobs)],
-      ["Pending jobs", (d.jobs||[]).filter(function(j){return j.status==="pending";}).reduce(function(s,x){return s+x.count;},0)]
+      ["Pending", (d.applications||[]).filter(function(x){return x.status==="pending";}).reduce(function(s,x){return s+x.count;},0)],
+      ["Accepts", (d.applications||[]).filter(function(x){return x.status==="accepted";}).reduce(function(s,x){return s+x.count;},0)],
+      ["Rejected", (d.applications||[]).filter(function(x){return x.status==="rejected";}).reduce(function(s,x){return s+x.count;},0)],
+      ["Revenue", money((d.revenue||{}).total_cents)],
+      ["Subscribers", (d.active_subscriptions||0)],
+      ["SLA overdue", (d.sla||{}).overdue_count || 0]
     ];
+    var slaLine = document.getElementById("slaLine");
+    if (slaLine) {
+      slaLine.innerHTML = "Target response " + (d.sla||{}).target_min_minutes + "–" + (d.sla||{}).target_max_minutes +
+        " min · average " + ((d.sla||{}).average_response_minutes == null ? "—" : d.sla.average_response_minutes + " min") +
+        " · pending " + ((d.sla||{}).pending_count||0) + " · overdue " + ((d.sla||{}).overdue_count||0);
+    }
     document.getElementById("stats").innerHTML = cards.map(function(c){
       return '<div class="stat"><b>'+c[1]+'</b><span>'+c[0]+'</span></div>';
     }).join("");
@@ -277,16 +311,26 @@ function renderRequests(){
   var rows = requestsCache.filter(function(a){ return !filter || a.status === filter; });
   document.getElementById("reqCount").textContent = rows.length + " request(s)";
   document.getElementById("reqList").innerHTML = rows.map(function(a){
+    var cls = a.status==="accepted"?" green":a.status==="rejected"?" red":" grey";
+    var sla = a.sla || {};
+    var slaTxt = a.status==="pending"
+      ? (sla.overdue ? '<span class="pill red">overdue '+sla.elapsed_minutes+' min</span>'
+                     : '<span class="pill">'+sla.remaining_minutes+' min left</span>')
+      : '<span class="pill green">answered in '+(sla.elapsed_minutes||0)+' min</span>';
     return '<div class="card" data-ref="'+esc(a.reference)+'">'+
-      '<div class="row"><b>'+esc(a.full_name)+'</b><span class="pill'+(a.status==="approved"?" green":a.status==="rejected"?" red":"")+'">'+esc(a.status)+'</span></div>'+
+      '<div class="row"><b>'+esc(a.full_name)+'</b><span class="pill'+cls+'">'+esc(a.status)+'</span></div>'+
       '<p class="muted" style="margin:6px 0">'+esc(a.profession)+' → '+esc(a.target_country)+'<br>'+esc(a.email)+
       (a.phone?' · '+esc(a.phone):'')+'</p>'+
-      '<p class="muted" style="margin:0;font-size:11px">'+esc(a.reference)+' · '+timeOf(a.created_at)+'</p>'+
-      '<div class="actions">'+
-        ['under_review','shortlisted','approved','rejected','completed'].map(function(s){
-          return '<button class="chip'+(a.status===s?" primary":"")+'" data-set="'+s+'">'+s.replace("_"," ")+'</button>';
-        }).join("")+
-      '</div></div>';
+      '<p class="muted" style="margin:0;font-size:11px">'+esc(a.reference)+' · '+timeOf(a.created_at)+' '+slaTxt+'</p>'+
+      (a.total_cents?'<p class="muted" style="margin:4px 0 0;font-size:11px">JobConnect $'+(a.fee_cents/100).toFixed(2)+
+        ' + recruiter $'+(a.recruiter_price_cents/100).toFixed(2)+' = <b>$'+(a.total_cents/100).toFixed(2)+'</b> · '+
+        (a.paid_at?'paid':'unpaid')+'</p>':'')+
+      (a.decision_reason?'<p class="muted" style="margin:6px 0 0;font-size:12px">Motif : '+esc(a.decision_reason)+'</p>':'')+
+      (a.status==="pending"?'<div class="actions">'+
+        '<button class="chip primary" data-set="accepted">Accept</button>'+
+        '<button class="chip danger" data-set="rejected">Reject with reason</button>'+
+      '</div>':'')+
+    '</div>';
   }).join("") || '<p class="empty">No requests.</p>';
 }
 document.getElementById("reqFilter").onchange = renderRequests;
@@ -294,13 +338,21 @@ document.getElementById("reqList").addEventListener("click", async function(e){
   var btn = e.target.closest("[data-set]");
   if (!btn) return;
   var card = btn.closest("[data-ref]");
-  var note = prompt("Message for the candidate (optional)", "");
-  if (note === null) return;
+  var status = btn.dataset.set;
+  var reason = "";
+  if (status === "rejected") {
+    reason = prompt("Reason for rejection (required, shown to the candidate):", "");
+    if (reason === null) return;
+    if (reason.trim().length < 5) { toast("A reason of at least 5 characters is required."); return; }
+  } else {
+    var note = prompt("Optional message for the candidate:", "");
+    if (note !== null) reason = note;
+  }
   try{
     await api("/api/admin/applications/" + encodeURIComponent(card.dataset.ref), {
-      method: "PATCH", body: { status: btn.dataset.set, admin_note: note }
+      method: "PATCH", body: { status: status, decision_reason: reason }
     });
-    toast("Request updated.");
+    toast(status === "accepted" ? "Request accepted." : "Request rejected.");
     loadRequests(); loadOverview();
   }catch(ex){ toast(ex.message); }
 });
@@ -424,6 +476,49 @@ document.getElementById("chatMsgs").addEventListener("click", async function(e){
     toast("Message deleted for both parties.");
   }catch(ex){ toast(ex.message); }
 });
+
+/* --------------------------------------------------------------- réglages */
+async function loadSettings(){
+  try{
+    var d = await api("/api/admin/settings");
+    var st = d.settings || {};
+    document.getElementById("setFee").value = st.jobconnect_fee_cents;
+    document.getElementById("setRecruiterPrice").value = st.recruiter_price_cents;
+    document.getElementById("setPromo").value = st.promo_price_cents;
+    document.getElementById("setSlaMin").value = st.sla_target_min_minutes;
+    document.getElementById("setSlaMax").value = st.sla_target_max_minutes;
+    document.getElementById("setCurrency").value = st.currency;
+    document.getElementById("integrations").innerHTML =
+      '<div class="row"><span>Card payments (Stripe)</span><span class="pill' + (d.integrations.payments ? " green" : " red") + '">' +
+      (d.integrations.payments ? "configured" : "not configured") + '</span></div>' +
+      '<div class="row" style="margin-top:8px"><span>E-mail delivery (Resend)</span><span class="pill' + (d.integrations.email ? " green" : " red") + '">' +
+      (d.integrations.email ? "configured" : "not configured") + '</span></div>';
+  }catch(e){ toast(e.message); }
+  try{
+    var log = await api("/api/admin/email-log");
+    document.getElementById("emailLog").innerHTML = (log.emails||[]).map(function(m){
+      return '<div class="card"><div class="row"><b>'+esc(m.subject)+'</b><span class="pill' +
+        (m.status==="sent"?" green":m.status==="failed"?" red":" grey")+'">'+esc(m.status)+'</span></div>'+
+        '<p class="muted" style="margin:6px 0 0;font-size:11px">'+esc(m.to_email)+' · '+timeOf(m.created_at)+
+        (m.error?' · '+esc(m.error):'')+'</p></div>';
+    }).join("") || '<p class="empty">No e-mails recorded.</p>';
+  }catch(e){ /* silencieux */ }
+}
+
+document.getElementById("saveSettings").onclick = async function(){
+  try{
+    await api("/api/admin/settings", { method:"PATCH", body: {
+      jobconnect_fee_cents: Number(document.getElementById("setFee").value),
+      recruiter_price_cents: Number(document.getElementById("setRecruiterPrice").value),
+      promo_price_cents: Number(document.getElementById("setPromo").value),
+      sla_target_min_minutes: Number(document.getElementById("setSlaMin").value),
+      sla_target_max_minutes: Number(document.getElementById("setSlaMax").value),
+      currency: document.getElementById("setCurrency").value
+    }});
+    toast("Settings saved.");
+    loadSettings(); loadOverview();
+  }catch(e){ toast(e.message); }
+};
 
 /* ---------------------------------------------------------- notifications */
 async function loadNotifs(){

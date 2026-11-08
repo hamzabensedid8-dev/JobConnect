@@ -438,3 +438,54 @@ html[data-theme="dark"] .panel { color: var(--text); }
 
   .bg-aurora span { filter: blur(54px); opacity: .42; }
 }
+
+/* ======================= statuts, SLA, prix, paiement ======================= */
+
+.status-pending  { background: #fff3d6; color: #8a6100; }
+.status-accepted { background: #e3f7ec; color: #0f7a53; }
+.status-rejected { background: #fdeaea; color: #b4232a; }
+html[data-theme="dark"] .status-pending  { background: rgba(255,193,7,.16); color: #ffd166; }
+html[data-theme="dark"] .status-accepted { background: rgba(18,129,93,.2);   color: #7fe0bb; }
+html[data-theme="dark"] .status-rejected { background: rgba(229,72,77,.18);  color: #ff9b9e; }
+
+.sla { display: inline-block; padding: 3px 9px; border-radius: 20px; background: #eaf0ff; color: var(--blue); font-size: 11px; font-weight: 800; }
+.sla.late { background: #fff3d6; color: #8a6100; }
+.sla.done { background: #e3f7ec; color: #0f7a53; }
+
+.reason { background: #fdeaea; border-left: 3px solid #e5484d; padding: 10px 12px; border-radius: 8px; }
+html[data-theme="dark"] .reason { background: rgba(229,72,77,.14); }
+
+/* prix sur les cartes d'offre */
+.job-price {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(20,92,245,.08), rgba(160,107,255,.08));
+  border: 1px solid var(--glass-border);
+  font-size: 12px; color: var(--text-soft);
+}
+.job-price b { color: var(--text); font-size: 14px; }
+.job-price small { font-size: 10.5px; opacity: .85; }
+
+/* abonnement recruteur */
+.sub-ok { background: #e3f7ec; color: #0f7a53; padding: 12px 14px; border-radius: 12px; font-size: 13px; font-weight: 700; }
+.sub-required { background: #fff3d6; color: #8a6100; padding: 12px 14px; border-radius: 12px; font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+html[data-theme="dark"] .sub-ok { background: rgba(18,129,93,.18); color: #7fe0bb; }
+html[data-theme="dark"] .sub-required { background: rgba(255,193,7,.14); color: #ffd166; }
+
+/* trois formules */
+.plans.three { grid-template-columns: repeat(3, 1fr); max-width: 1100px; }
+@media (max-width: 860px) { .plans.three { grid-template-columns: 1fr; } }
+
+/* fenêtre de paiement */
+.pay-sheet { width: min(460px, 100%); }
+.pay-body { padding: 18px; }
+.pay-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 12px 0; }
+.pay-table td { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.pay-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.pay-table tr.total td { font-weight: 800; font-size: 15px; border-bottom: 0; padding-top: 12px; }
+.pay-note { font-size: 11px; color: var(--text-soft); line-height: 1.6; margin: 10px 0 14px; }
+.pay-error { color: #e5484d; font-size: 12px; min-height: 16px; margin: 8px 0 0; }
+.pay-page { text-align: center; max-width: 620px; }
+.pay-page h2 { font: 800 26px Manrope; margin: 0 0 10px; }
+.pay-status { margin: 18px auto; padding: 16px; border-radius: 12px; background: var(--surface-2); font-size: 13px; max-width: 460px; }
+.pay-status.ok { background: #e3f7ec; color: #0f7a53; }

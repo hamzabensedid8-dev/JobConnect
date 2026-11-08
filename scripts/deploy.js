@@ -60,7 +60,15 @@ const secrets = {
   JWT_SECRET: process.env.JWT_SECRET,
   CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
   // Shared key the Android app sends so admin accounts can only sign in there.
-  ADMIN_CLIENT_KEY: process.env.ADMIN_CLIENT_KEY || ''
+  ADMIN_CLIENT_KEY: process.env.ADMIN_CLIENT_KEY || '',
+  // Public origin used for Stripe redirect URLs.
+  PUBLIC_URL: process.env.PUBLIC_URL || '',
+  // Stripe (real payments). Empty = the API refuses to open a payment session.
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET || '',
+  // Resend (real e-mail delivery). Empty = e-mails are logged as "skipped".
+  RESEND_API_KEY: process.env.RESEND_API_KEY || '',
+  MAIL_FROM: process.env.MAIL_FROM || ''
 };
 
 for (const [key, value] of Object.entries(secrets)) {
