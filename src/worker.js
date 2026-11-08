@@ -67,7 +67,7 @@ function fail(message, status = 400) {
 function corsHeaders() {
   return {
     'access-control-allow-origin': '*',
-    'access-control-allow-headers': 'authorization, content-type, apikey',
+    'access-control-allow-headers': 'authorization, content-type, apikey, x-jc-client-key',
     'access-control-allow-methods': 'GET, POST, PATCH, DELETE, OPTIONS'
   };
 }
@@ -248,6 +248,30 @@ async function downloadCv(env, objectPath, filename) {
   headers.set('cache-control', 'private, no-store');
   for (const key of Object.keys(corsHeaders())) headers.set(key, corsHeaders()[key]);
   return new Response(res.body, { status: 200, headers });
+}
+
+/* ----------------------------------------------------------- notifications */
+
+/** Create an in-app notification. Never throws: notifications are best effort. */
+async function notify(env, userId, { type, title, body = null, conversation_id = null, application_ref = null }) {
+  try {
+    await rest(env, 'notifications', {
+      method: 'POST',
+      prefer: 'return=minimal',
+      body: { user_id: userId, type, title, body, conversation_id, application_ref }
+    });
+  } catch (err) {
+    console.error('notify failed:', err && err.message ? err.message : err);
+  }
+}
+
+async function notifyAdmins(env, payload) {
+  try {
+    const admins = await rest(env, 'users?role=eq.admin&select=id');
+    await Promise.all((admins || []).map((a) => notify(env, a.id, payload)));
+  } catch (err) {
+    console.error('notifyAdmins failed:', err && err.message ? err.message : err);
+  }
 }
 
 /* --------------------------------------------------------------------- JWT */
@@ -453,6 +477,17 @@ async function handleApi(request, url, env) {
       return fail('Incorrect email or password.', 401);
     }
 
+    // The admin console only exists inside the Android application. An admin
+    // account cannot obtain a session from the website: the official client
+    // sends the shared client key, the browser never does.
+    if (user.role === 'admin') {
+      const provided = request.headers.get('x-jc-client-key') || '';
+      const expected = env.ADMIN_CLIENT_KEY || '';
+      if (!expected || provided !== expected) {
+        return fail('This account is not available on the web version.', 403);
+      }
+    }
+
     const token = await signToken({ id: user.id, role: user.role }, env.JWT_SECRET);
     return json({ token, user: publicUser(user) });
   }
@@ -629,6 +664,19 @@ async function handleApi(request, url, env) {
       }
     });
 
+    await notify(env, job.recruiter_id, {
+      type: 'new_application',
+      title: 'New application',
+      body: `${user.name} applied to "${job.title}"`,
+      application_ref: reference
+    });
+    await notifyAdmins(env, {
+      type: 'new_application',
+      title: 'New application',
+      body: `${user.name} → ${job.title} (${job.company})`,
+      application_ref: reference
+    });
+
     return json({ reference, message: 'Application recorded.' }, 201);
   }
 
@@ -681,6 +729,13 @@ async function handleApi(request, url, env) {
         message: str(fields.message, 4000),
         cv_path: cvPath
       }
+    });
+
+    await notifyAdmins(env, {
+      type: 'new_request',
+      title: 'New contract request',
+      body: `${fullName} — ${profession} → ${targetCountry}`,
+      application_ref: reference
     });
 
     return json(
@@ -841,6 +896,292 @@ async function handleApi(request, url, env) {
     });
     if (!rows || !rows.length) return fail('Job not found.', 404);
     return json({ message: 'Job updated.' });
+  }
+
+
+  /* --------------------------------------------------------------- chat */
+
+  const CONV_SELECT =
+    'id,kind,candidate_id,recruiter_id,job_id,created_at,last_message_at,' +
+    'candidate:users!conversations_candidate_id_fkey(name,email,role),' +
+    'recruiter:users!conversations_recruiter_id_fkey(name,email,role,company)';
+
+  function canAccess(conv, claims) {
+    if (!conv || !claims) return false;
+    if (claims.role === 'admin') return true;
+    return conv.candidate_id === claims.id || conv.recruiter_id === claims.id;
+  }
+
+  async function loadConversation(env, id) {
+    const rows = await rest(env, `conversations?id=eq.${encodeURIComponent(id)}&select=${CONV_SELECT}`);
+    return rows && rows[0];
+  }
+
+  if (path === '/api/chat/conversations' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+
+    const filter =
+      claims.role === 'admin'
+        ? ''
+        : claims.role === 'candidate'
+          ? `candidate_id=eq.${claims.id}&`
+          : `recruiter_id=eq.${claims.id}&`;
+
+    const conversations = (await rest(
+      env,
+      `conversations?${filter}select=${CONV_SELECT}&order=last_message_at.desc&limit=100`
+    )) || [];
+
+    if (!conversations.length) return json({ conversations: [] });
+
+    const ids = conversations.map((c) => c.id).join(',');
+    const [unread, latest] = await Promise.all([
+      rest(env, `messages?conversation_id=in.(${ids})&read_at=is.null&deleted_at=is.null&select=conversation_id`),
+      rest(
+        env,
+        `messages?conversation_id=in.(${ids})&deleted_at=is.null&select=conversation_id,body,sender_role,created_at&order=id.desc`
+      )
+    ]);
+
+    const unreadByConv = {};
+    for (const m of unread || []) {
+      unreadByConv[m.conversation_id] = (unreadByConv[m.conversation_id] || 0) + 1;
+    }
+    const lastByConv = {};
+    for (const m of latest || []) {
+      if (!lastByConv[m.conversation_id]) lastByConv[m.conversation_id] = m;
+    }
+
+    return json({
+      conversations: conversations.map((c) => ({
+        ...c,
+        unread: unreadByConv[c.id] || 0,
+        last_message: lastByConv[c.id] || null
+      }))
+    });
+  }
+
+  if (path === '/api/chat/conversations' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+
+    const body = await request.json().catch(() => ({}));
+    const kind = body.kind === 'recruiter' ? 'recruiter_candidate' : 'admin_candidate';
+
+    let candidateId = null;
+    let recruiterId = null;
+    let jobId = null;
+
+    if (kind === 'admin_candidate') {
+      if (claims.role === 'candidate') candidateId = claims.id;
+      else if (claims.role === 'admin') candidateId = str(body.candidate_id, 60);
+      else return fail('Access denied.', 403);
+      if (!candidateId) return fail('candidate_id is required.');
+    } else {
+      if (claims.role === 'candidate') {
+        // A candidate can only reach the recruiter who published the job.
+        const jobIdIn = str(body.job_id, 40);
+        if (!jobIdIn) return fail('job_id is required to contact a recruiter.');
+        const jobs = await rest(env, `jobs?id=eq.${encodeURIComponent(jobIdIn)}&status=eq.published&select=id,recruiter_id,title`);
+        const job = jobs && jobs[0];
+        if (!job) return fail('Job not found.', 404);
+        candidateId = claims.id;
+        recruiterId = job.recruiter_id;
+        jobId = job.id;
+      } else if (claims.role === 'recruiter') {
+        candidateId = str(body.candidate_id, 60);
+        recruiterId = claims.id;
+        jobId = str(body.job_id, 40);
+        if (!candidateId) return fail('candidate_id is required.');
+      } else {
+        return fail('Access denied.', 403);
+      }
+      if (!candidateId || !recruiterId) return fail('Invalid conversation.');
+      if (candidateId === recruiterId) return fail('Invalid conversation.');
+    }
+
+    // Reuse an existing thread rather than creating duplicates.
+    const lookup =
+      kind === 'admin_candidate'
+        ? `conversations?kind=eq.admin_candidate&candidate_id=eq.${candidateId}&select=${CONV_SELECT}`
+        : `conversations?kind=eq.recruiter_candidate&candidate_id=eq.${candidateId}&recruiter_id=eq.${recruiterId}&select=${CONV_SELECT}`;
+
+    const existing = await rest(env, lookup);
+    if (existing && existing.length) return json({ conversation: existing[0] });
+
+    const created = await rest(env, 'conversations', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: { kind, candidate_id: candidateId, recruiter_id: recruiterId, job_id: jobId }
+    });
+    return json({ conversation: created[0] }, 201);
+  }
+
+  const convMessagesMatch = path.match(/^\/api\/chat\/conversations\/(\d+)\/messages$/);
+  if (convMessagesMatch && (method === 'GET' || method === 'POST')) {
+    if (!claims) return fail('Authentication required.', 401);
+    const conv = await loadConversation(env, convMessagesMatch[1]);
+    if (!canAccess(conv, claims)) return fail('Conversation not found.', 404);
+
+    if (method === 'GET') {
+      const after = str(url.searchParams.get('after'), 30);
+      let query = `messages?conversation_id=eq.${conv.id}&deleted_at=is.null&select=id,sender_id,sender_role,body,created_at,read_at&order=id.asc&limit=200`;
+      if (after) query += `&id=gt.${encodeURIComponent(after)}`;
+      const messages = (await rest(env, query)) || [];
+      return json({ messages, conversation: conv });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const text = str(body.body, 4000);
+    if (!text) return fail('Message cannot be empty.');
+
+    const inserted = await rest(env, 'messages', {
+      method: 'POST',
+      prefer: 'return=representation',
+      body: {
+        conversation_id: conv.id,
+        sender_id: claims.id,
+        sender_role: claims.role,
+        body: text
+      }
+    });
+
+    await rest(env, `conversations?id=eq.${conv.id}`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: { last_message_at: new Date().toISOString() }
+    });
+
+    const recipients = new Set();
+    if (conv.kind === 'admin_candidate') {
+      if (claims.role === 'candidate') {
+        const admins = await rest(env, 'users?role=eq.admin&select=id');
+        (admins || []).forEach((a) => recipients.add(a.id));
+      } else if (conv.candidate_id) {
+        recipients.add(conv.candidate_id);
+      }
+    } else {
+      if (claims.id !== conv.candidate_id) recipients.add(conv.candidate_id);
+      if (conv.recruiter_id && claims.id !== conv.recruiter_id) recipients.add(conv.recruiter_id);
+    }
+
+    const senderName =
+      claims.role === 'admin' ? 'JobConnect team' : claims.role === 'recruiter' ? 'Recruiter' : 'Candidate';
+
+    await Promise.all(
+      [...recipients].map((userId) =>
+        notify(env, userId, {
+          type: 'new_message',
+          title: `New message from ${senderName}`,
+          body: text.slice(0, 140),
+          conversation_id: conv.id
+        })
+      )
+    );
+
+    return json({ message: inserted[0] }, 201);
+  }
+
+  const convReadMatch = path.match(/^\/api\/chat\/conversations\/(\d+)\/read$/);
+  if (convReadMatch && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    const conv = await loadConversation(env, convReadMatch[1]);
+    if (!canAccess(conv, claims)) return fail('Conversation not found.', 404);
+
+    await rest(env, `messages?conversation_id=eq.${conv.id}&read_at=is.null`, {
+      method: 'PATCH',
+      prefer: 'return=minimal',
+      body: { read_at: new Date().toISOString() }
+    });
+    return json({ message: 'Marked as read.' });
+  }
+
+  /* ------------------------------------------------ admin moderation (APK) */
+
+  const adminMessageMatch = path.match(/^\/api\/admin\/chat\/messages\/(\d+)$/);
+  if (adminMessageMatch && method === 'DELETE') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+
+    const rows = await rest(env, `messages?id=eq.${adminMessageMatch[1]}`, {
+      method: 'PATCH',
+      prefer: 'return=representation',
+      body: { deleted_at: new Date().toISOString(), deleted_by: claims.id }
+    });
+    if (!rows || !rows.length) return fail('Message not found.', 404);
+    return json({ message: 'Message deleted for both parties.' });
+  }
+
+  const adminConvMatch = path.match(/^\/api\/admin\/chat\/conversations\/(\d+)$/);
+  if (adminConvMatch && method === 'DELETE') {
+    if (!claims) return fail('Authentication required.', 401);
+    if (claims.role !== 'admin') return fail('Access denied.', 403);
+
+    const rows = await rest(env, `conversations?id=eq.${adminConvMatch[1]}`, {
+      method: 'DELETE',
+      prefer: 'return=representation'
+    });
+    if (!rows || !rows.length) return fail('Conversation not found.', 404);
+    return json({ message: 'Conversation deleted for both parties.' });
+  }
+
+  /* ------------------------------------------------------- notifications */
+
+  if (path === '/api/notifications' && method === 'GET') {
+    if (!claims) return fail('Authentication required.', 401);
+
+    const after = str(url.searchParams.get('after'), 30);
+    let query =
+      'notifications?user_id=eq.' +
+      claims.id +
+      '&select=id,type,title,body,conversation_id,application_ref,read_at,created_at&order=id.desc&limit=50';
+    if (after) query += `&id=gt.${encodeURIComponent(after)}`;
+
+    const notifications = (await rest(env, query)) || [];
+    const unread = await rest(env, `notifications?user_id=eq.${claims.id}&read_at=is.null&select=id`);
+
+    return json({
+      notifications,
+      unread_count: (unread || []).length,
+      server_time: new Date().toISOString()
+    });
+  }
+
+  if (path === '/api/notifications/read' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    const body = await request.json().catch(() => ({}));
+
+    if (body.all !== false && !Array.isArray(body.ids)) {
+      await rest(env, `notifications?user_id=eq.${claims.id}&read_at=is.null`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { read_at: new Date().toISOString() }
+      });
+      return json({ message: 'All notifications marked as read.' });
+    }
+
+    const ids = (body.ids || []).filter((id) => /^\d+$/.test(String(id)));
+    if (ids.length) {
+      await rest(env, `notifications?id=in.(${ids.join(',')})&user_id=eq.${claims.id}`, {
+        method: 'PATCH',
+        prefer: 'return=minimal',
+        body: { read_at: new Date().toISOString() }
+      });
+    }
+    return json({ message: 'Notifications marked as read.' });
+  }
+
+  /* ------------------------------------------------------------- devices */
+
+  if (path === '/api/devices' && method === 'POST') {
+    if (!claims) return fail('Authentication required.', 401);
+    const body = await request.json().catch(() => ({}));
+    const label = str(body.label, 80) || 'android';
+    await rest(env, 'devices?on_conflict=user_id,label', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=minimal',
+      body: { user_id: claims.id, platform: 'android', label, last_seen_at: new Date().toISOString() }
+    });
+    return json({ message: 'Device registered.' });
   }
 
   return fail('Endpoint not found.', 404);

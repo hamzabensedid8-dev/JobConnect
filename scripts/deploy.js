@@ -58,10 +58,13 @@ const secrets = {
   SUPABASE_URL: process.env.SUPABASE_URL,
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,
   JWT_SECRET: process.env.JWT_SECRET,
-  CORS_ORIGIN: process.env.CORS_ORIGIN || '*'
+  CORS_ORIGIN: process.env.CORS_ORIGIN || '*',
+  // Shared key the Android app sends so admin accounts can only sign in there.
+  ADMIN_CLIENT_KEY: process.env.ADMIN_CLIENT_KEY || ''
 };
 
 for (const [key, value] of Object.entries(secrets)) {
+  if (!value) continue;
   await cf(`${api}/workers/scripts/${name}/secrets`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },

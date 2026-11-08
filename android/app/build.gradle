@@ -1,0 +1,41 @@
+plugins { id 'com.android.application' }
+
+def siteUrl = System.getenv('SITE_URL') ?: 'https://jc.jobconnectdz.workers.dev'
+def adminKey = System.getenv('ADMIN_CLIENT_KEY') ?: ''
+
+android {
+    namespace 'com.jobconnect.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.jobconnect.app'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'SITE_URL', "\"${siteUrl}\""
+        buildConfigField 'String', 'ADMIN_CLIENT_KEY', "\"${adminKey}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    buildTypes {
+        debug { applicationIdSuffix '.debug' }
+        release {
+            minifyEnabled false
+            // Signed with the CI keystore when RELEASE_* secrets are present.
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.work:work-runtime:2.9.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+}
